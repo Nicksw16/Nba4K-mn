@@ -38,13 +38,18 @@ const SKIN_TONES: RGB[] = [
   [152, 104, 70], [118, 78, 52], [86, 56, 38],
 ];
 
-function skinOf(actor: Actor): RGB {
+/** Tom de pele por id, em 0..255. O 3D usa o mesmo, para nao divergir. */
+export function skinToneFor(id: string): RGB {
   let h = 2166136261;
-  for (let i = 0; i < actor.id.length; i++) {
-    h ^= actor.id.charCodeAt(i);
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return SKIN_TONES[Math.abs(h) % SKIN_TONES.length];
+}
+
+function skinOf(actor: Actor): RGB {
+  return skinToneFor(actor.id);
 }
 
 interface Materials {

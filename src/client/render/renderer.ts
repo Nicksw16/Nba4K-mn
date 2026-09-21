@@ -296,6 +296,71 @@ export function drawActors(
   }
 }
 
+/**
+ * Camada de INFORMACAO sobre os corpos, quando quem rasteriza e o WebGL.
+ *
+ * Nome, anel do jogador controlado, barra de energia e micro-reacoes continuam
+ * em 2D: sao texto e simbolo de interface, que em 3D exigiriam atlas de fonte
+ * e billboard para ganhar nada. O corpo em si ja saiu na GPU.
+ */
+export function drawActorOverlays(
+  ctx: Ctx,
+  proj: Projection,
+  infos: ActorRenderInfo[],
+  options: RenderOptions,
+): void {
+  if (options.immersion) return;
+  for (const info of infos) {
+    const a = info.actor;
+    const foot = proj.project(v3(a.pos.x, a.pos.y, 0.02));
+    const head = proj.project(v3(a.pos.x, a.pos.y, a.profile.physique.height + a.z));
+    if (!foot || !head) continue;
+    const pxHeight = Math.abs(foot.y - head.y);
+
+    if (options.showIndicators) {
+      const rx = foot.scale * 0.33;
+      const ry = rx * 0.38;
+      if (info.isUser) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(126,246,192,0.95)';
+        ctx.lineWidth = Math.max(1.4, foot.scale * 0.016);
+        ctx.beginPath();
+        ctx.ellipse(foot.x, foot.y, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (info.isBallHandler) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,214,120,0.7)';
+        ctx.lineWidth = Math.max(1, foot.scale * 0.012);
+        ctx.beginPath();
+        ctx.ellipse(foot.x, foot.y, rx * 0.84, ry * 0.84, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (a.stamina < 0.62 && pxHeight > 26) {
+        const bw = foot.scale * 0.5;
+        const by = foot.y + Math.max(4, foot.scale * 0.035);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(foot.x - bw / 2, by, bw, 3);
+        ctx.fillStyle = a.stamina < 0.3 ? '#ef5e5e' : '#f2c14e';
+        ctx.fillRect(foot.x - bw / 2, by, bw * clamp01(a.stamina), 3);
+      }
+    }
+
+    if (options.showNames && pxHeight > 40) {
+      ctx.fillStyle = 'rgba(236,243,255,0.86)';
+      ctx.font = `600 ${Math.round(clamp(pxHeight * 0.115, 9, 15))}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(info.label, head.x, head.y - pxHeight * 0.1);
+      ctx.shadowBlur = 0;
+    }
+
+    if (options.showDebug) drawActorDebug(ctx, proj, a);
+  }
+}
+
 /** Vetores de estado por cima do corpo (secao 138). */
 function drawActorDebug(ctx: Ctx, proj: Projection, a: Actor): void {
   const foot = proj.project(v3(a.pos.x, a.pos.y, 0.05));

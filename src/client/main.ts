@@ -14,11 +14,14 @@ import { Team, teamLabel } from '../core/model/team.js';
 import { CameraMode, CameraState, addShake, buildProjection, createCamera, framingFor, updateCamera } from './render/camera.js';
 import {
   ActorRenderInfo, DEFAULT_RENDER_OPTIONS, RenderOptions, TeamColors,
-  drawActors, drawBall, drawCourt, drawHoops, drawPlayArt, drawPointer,
+  drawActorOverlays, drawActors, drawBall, drawCourt, drawHoops, drawPlayArt, drawPointer,
 } from './render/renderer.js';
 import { HudState, createHudState, drawMatchupInfo, drawPlayerPanel, drawScorebug, drawShotFeedback, drawShotMeter, drawTicker } from './ui/hud.js';
 import { AudioEngine, crowdLevelFor } from './audio/audio.js';
 import { drawApron, drawHall, drawJumbotron, drawRibbon, drawStands } from './render/arena.js';
+import { Renderer3D } from './gl/renderer3d.js';
+import { skinToneFor } from './render/body.js';
+import { createBall } from '../core/sim/ball.js';
 import { CONTROL_HELP, TOUCH_HELP, InputManager } from './input/input.js';
 import { TouchInput } from './input/touch.js';
 import { el, clear, card, sliderRow, selectRow, table } from './ui/dom.js';
@@ -48,6 +51,13 @@ export interface AppContext {
 
 export class App {
   canvas: HTMLCanvasElement;
+  /** Tela 2D por cima do palco 3D: scorebug, nomes, medidores. */
+  private hudCanvas!: HTMLCanvasElement;
+  /** Renderizador 3D, ou null quando o navegador nao tem WebGL2. */
+  private gl3d: Renderer3D | null = null;
+  /** Contexto 2D do PALCO, so no caminho de reserva. */
+  private ctx2d: CanvasRenderingContext2D | null = null;
+  private glError = '';
   ctx: CanvasRenderingContext2D;
   ui: HTMLElement;
   input: InputManager;
@@ -87,11 +97,26 @@ export class App {
 
   constructor() {
     this.canvas = document.getElementById('stage') as HTMLCanvasElement;
+    this.hudCanvas = document.getElementById('hud') as HTMLCanvasElement;
     // Sem canvas 2D nao ha jogo. Melhor dizer isso do que estourar em
     // qualquer chamada de desenho la na frente, com uma pilha ilegivel.
-    const ctx = this.canvas?.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('Este navegador nao liberou o canvas 2D, que e o que desenha a quadra.');
+    const ctx = this.hudCanvas?.getContext('2d', { alpha: true });
+    if (!ctx) throw new Error('Este navegador nao liberou o canvas 2D, que e o que desenha o HUD.');
     this.ctx = ctx;
+
+    // Palco em WebGL2 quando der. O Canvas 2D fica de reserva: navegador sem
+    // WebGL2 (ou com a aceleracao desligada) continua jogando, so com a
+    // apresentacao mais simples.
+    try {
+      window.__courtsideStage?.('preparando o 3D');
+      this.gl3d = new Renderer3D(this.canvas);
+    } catch (err) {
+      this.gl3d = null;
+      this.glError = err instanceof Error ? err.message : String(err);
+      const fallback = this.canvas.getContext('2d', { alpha: false });
+      if (!fallback) throw new Error('Este navegador nao liberou nem WebGL2 nem canvas 2D.');
+      this.ctx2d = fallback;
+    }
     this.ui = document.getElementById('ui') as HTMLElement;
     this.input = new InputManager(window);
     this.touch = new TouchInput(this.ui);
@@ -148,9 +173,15 @@ export class App {
 
   private resize(): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.canvas.width = Math.floor(window.innerWidth * dpr);
-    this.canvas.height = Math.floor(window.innerHeight * dpr);
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.hudCanvas.width = w;
+    this.hudCanvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx2d?.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.gl3d?.resize(w, h);
   }
 
   get width(): number { return this.canvas.width / Math.min(2, window.devicePixelRatio || 1); }
@@ -466,6 +497,9 @@ export class App {
     });
     this.onGameEnd = opts.onEnd ?? null;
     this.render.immersion = this.sliders.immersionMode;
+    // A quadra e pintada com as cores do mandante uma vez por partida, nao a
+    // cada quadro: e uma imagem de quase mil pixels de largura.
+    this.gl3d?.setCourt(home.identity.colors.primary, home.identity.colors.accent);
     this.sim.start();
     this.paused = false;
     this.go('game');
@@ -567,6 +601,7 @@ export class App {
       this.last = now;
       this.update(dtRaw, now / 1000);
       this.draw(now / 1000);
+      this.watchPerformance(dtRaw);
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -699,33 +734,122 @@ export class App {
     this.touch.endFrame();
   }
 
+  /**
+   * Cena em WebGL2. Monta a lista de instancias do quadro e manda desenhar.
+   * O tom de pele sai do id do atleta, igual ao caminho 2D, para o mesmo
+   * atleta ter sempre o mesmo tom nos dois renderizadores.
+   */
+  private drawScene3D(time: number): void {
+    const gl = this.gl3d;
+    if (!gl) return;
+    const sim = this.sim;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const shift = framingFor(this.width / Math.max(1, this.height)).shift;
+
+    if (!sim || this.screen !== 'game') {
+      // Sem partida em curso: so a arena. A bola vai para fora de vista.
+      const parada = createBall();
+      parada.pos = v3(-99, -99, -99);
+      gl.build([], parada, null, time, this.crowdEnergy);
+      gl.render(this.camera, w, h, this.crowdEnergy, shift);
+      return;
+    }
+
+    const infos = sim.actors.filter((a) => a.onCourt).map((a) => ({
+      actor: a,
+      colors: sim.teams[a.team].identity.colors,
+      skin: skinToneFor(a.id).map((c) => Math.pow(c / 255, 2.2)) as [number, number, number],
+    }));
+    gl.build(infos, sim.ball, sim.ball.pos, time, this.crowdEnergy);
+    gl.render(this.camera, w, h, this.crowdEnergy, shift);
+  }
+
+  /**
+   * TROCA AUTOMATICA PARA O 2D.
+   *
+   * WebGL2 existir nao quer dizer que exista GPU. Navegador com aceleracao
+   * desligada, maquina virtual ou driver na lista negra caem no rasterizador
+   * por software, que roda a menos de 10 fps com sombra e publico. Um jogo a
+   * 8 fps e pior que um jogo 2D a 60, entao aqui a gente mede e decide.
+   *
+   * A medida so comeca depois de alguns quadros: os primeiros incluem
+   * compilacao de shader e upload de textura, que nao representam o regime.
+   */
+  private frameSamples = 0;
+  private frameTimeSum = 0;
+
+  private watchPerformance(dtSeconds: number): void {
+    if (!this.gl3d || this.screen !== 'game') return;
+    this.frameSamples++;
+    // Os 30 primeiros quadros sao aquecimento.
+    if (this.frameSamples <= 30) return;
+    this.frameTimeSum += dtSeconds;
+    const medidos = this.frameSamples - 30;
+    if (medidos < 90) return;
+
+    const medio = this.frameTimeSum / medidos;
+    if (medio > 0.04) {
+      this.fallbackTo2D(`o 3D rodou a ${(1 / medio).toFixed(0)} quadros por segundo`);
+    }
+    // Uma medida so por partida.
+    this.frameSamples = -1e9;
+  }
+
+  /**
+   * Um canvas tem UM tipo de contexto para sempre: pedir 2D depois de webgl2
+   * devolve null. Entao a troca exige um elemento novo no lugar do antigo.
+   */
+  private fallbackTo2D(motivo: string): void {
+    if (!this.gl3d) return;
+    const novo = document.createElement('canvas');
+    novo.id = 'stage';
+    this.canvas.replaceWith(novo);
+    this.canvas = novo;
+    const ctx = novo.getContext('2d', { alpha: false });
+    if (!ctx) return;
+    this.ctx2d = ctx;
+    this.gl3d = null;
+    this.glError = motivo;
+    this.resize();
+    // O ticker do HUD ja e o canal de aviso durante a partida.
+    this.hud.ticker.unshift(`Apresentacao simplificada: ${motivo}.`);
+  }
+
   private draw(time: number): void {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
-    drawHall(ctx, w, h);
-
-    const proj = buildProjection(this.camera, w, h, time, framingFor(w / Math.max(1, h)).shift);
+    const shift = framingFor(w / Math.max(1, h)).shift;
+    const proj = buildProjection(this.camera, w, h, time, shift);
     this.lastProj = proj;
     const colors: [TeamColors, TeamColors] = this.sim
       ? [this.sim.teams[0].identity.colors, this.sim.teams[1].identity.colors]
       : [this.league.teams[0].identity.colors, this.league.teams[1].identity.colors];
 
-    // De fora para dentro: arquibancada, LED, piso. A ordem e a do pintor,
-    // entao o que esta mais longe da camera vai antes.
-    drawStands(ctx, proj, time, this.crowdEnergy, this.render.quality);
-    drawRibbon(ctx, proj, time, colors[0].primary, colors[1].primary);
-    drawApron(ctx, proj);
-    drawCourt(ctx, proj, this.render, colors[0]);
-    drawHoops(ctx, proj);
-    if (this.sim && this.render.quality !== 'low') {
-      drawJumbotron(
-        ctx, proj,
-        [this.sim.score(0), this.sim.score(1)],
-        [this.sim.teams[0].identity.abbreviation, this.sim.teams[1].identity.abbreviation],
-        formatClock(this.sim.clock),
-        `${this.sim.period}o`,
-      );
+    // O HUD e sempre 2D e vive na sua propria tela, entao ela e limpa a cada
+    // quadro -- no caminho 3D a cena ja foi desenhada por baixo.
+    ctx.clearRect(0, 0, w, h);
+
+    if (this.gl3d) {
+      this.drawScene3D(time);
+    } else {
+      const c2 = this.ctx2d!;
+      drawHall(c2, w, h);
+      drawStands(c2, proj, time, this.crowdEnergy, this.render.quality);
+      drawRibbon(c2, proj, time, colors[0].primary, colors[1].primary);
+      drawApron(c2, proj);
+      drawCourt(c2, proj, this.render, colors[0]);
+      drawHoops(c2, proj);
+      if (this.sim && this.render.quality !== 'low') {
+        drawJumbotron(
+          c2, proj,
+          [this.sim.score(0), this.sim.score(1)],
+          [this.sim.teams[0].identity.abbreviation, this.sim.teams[1].identity.abbreviation],
+          formatClock(this.sim.clock),
+          `${this.sim.period}o`,
+        );
+      }
     }
 
     const sim = this.sim;
@@ -752,10 +876,16 @@ export class App {
         isBallHandler: handler?.id === a.id,
         label: `${a.profile.lastName}`,
       }));
-    // A bola vai junto: a mao de drible segue a bola de verdade, entao o
-    // quique e o braco nunca divergem.
-    drawActors(ctx, proj, infos, this.render, sim.ball.pos, time);
-    drawBall(ctx, proj, sim.ball, time);
+    if (!this.gl3d) {
+      // A bola vai junto: a mao de drible segue a bola de verdade, entao o
+      // quique e o braco nunca divergem.
+      drawActors(this.ctx2d!, proj, infos, this.render, sim.ball.pos, time);
+      drawBall(this.ctx2d!, proj, sim.ball, time);
+    } else {
+      // Em 3D os corpos ja foram rasterizados; aqui so sai o que e
+      // informacao: nome, anel do controlado, barra de energia, micro-reacoes.
+      drawActorOverlays(ctx, proj, infos, this.render);
+    }
 
     // Mira do mouse: onde o cursor toca a quadra e quem ele esta apontando.
     if (!this.isMobile && !this.render.immersion) {

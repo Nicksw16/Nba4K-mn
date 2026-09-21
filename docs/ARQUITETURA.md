@@ -120,9 +120,23 @@ Três consequências que vale conhecer:
   sombra no chão e o lado do contraluz. Mudar a direção muda as três coisas
   juntas, que é o que impede a cena de se desmontar.
 
-A arena (`arena.ts`) é geometria de mundo projetada pela mesma câmera, não
-uma camada 2D colada na tela. Por isso a arquibancada tem paralaxe correta
-quando a câmera desliza.
+## Dois renderizadores
+
+O mesmo esqueleto alimenta dois caminhos de desenho:
+
+| | `src/client/gl/` (WebGL2) | `src/client/render/` (Canvas 2D) |
+|---|---|---|
+| Oclusão | z-buffer, por pixel | ordenação por profundidade, por objeto |
+| Luz | Cook-Torrance por pixel | gradiente aproximando a seção do cilindro |
+| Sombra | shadow map com PCF | cápsulas projetadas na direção da luz |
+| Corpos | malhas instanciadas (uma chamada para os ~130 ossos) | um preenchimento por osso |
+
+O WebGL2 é o padrão. O 2D entra quando não há WebGL2 **ou** quando o 3D se
+prova lento: o cliente mede o tempo de quadro durante a partida e, abaixo de
+25 fps, troca o canvas e avisa no ticker. WebGL2 existir não garante que
+exista GPU — máquina virtual, driver na lista negra ou aceleração desligada
+caem num rasterizador por software que roda a menos de 10 fps. Um jogo a
+8 fps é pior que um jogo 2D a 60.
 
 ## Determinismo
 

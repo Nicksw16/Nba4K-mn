@@ -50,7 +50,7 @@ Estado atual: **84 prontas, 36 parciais, 21 ausentes**.
 | 37 | Camera system | Pronto | Cinco modos, todos amortecidos, sem corte seco. |
 | 38 | Audio | Pronto | Tudo sintetizado: quique, rangido, aro, tabela, rede, contato, apito, torcida. |
 | 39 | Broadcast presentation | Parcial | Scorebug, ticker, destaques, faixa de LED com as cores dos times, placar suspenso com o jogo de verdade e flashes de câmera na arquibancada. Sem pré-jogo, intervalo ou replay. |
-| 40 | Visual style | Parcial | Corpos volumétricos com luz de arena consistente (chave, ambiente, contraluz), sombra projetada na direção da luz e reflexo no verniz. Não é PBR fotorrealista: Canvas 2D não tem z-buffer nem shader. |
+| 40 | Visual style | Pronto | Renderizador WebGL2 com PBR de verdade: Cook-Torrance (GGX + Smith + Fresnel), luz direcional de arena com shadow map e PCF, ambiente hemisférico com bounce do verniz, tone mapping ACES e gamma. O Canvas 2D ficou como reserva para quem não tem WebGL2. |
 | 41 | Character creation | Parcial | Físico completo com efeito real; sem editor de rosto e aparência. |
 | 42 | MyPlayer builder | Pronto | 34 atributos, custo por físico, máximo alcançável e slots derivados. |
 | 43 | Badge system | Pronto | 53 badges, cada uma com situação específica declarada. |
@@ -107,7 +107,7 @@ Estado atual: **84 prontas, 36 parciais, 21 ausentes**.
 | 97 | Photo mode | Ausente | — |
 | 98 | Performance | Pronto | Simulação a ~4 ms por segundo de jogo; render em 60 fps. |
 | 99 | Loading | Pronto | Não há tela de carregamento. A distribuição em arquivo único abre direto do disco, sem servidor. |
-| 100 | Visual fidelity | Parcial | Arena inteira em geometria de mundo: arquibancada em degraus, público instanciado que reage à energia, faixa de LED, placar suspenso, piso de arena. Fotorrealismo com assets escaneados continua fora do alcance. |
+| 100 | Visual fidelity | Parcial | Malhas 3D reais com z-buffer, oclusão por pixel, sombra projetada, quadra com textura de madeira e marcação, público instanciado com a mesma luz da cena. O que ainda separa de uma produção AAA é o acabamento de asset — modelos esculpidos, texturas escaneadas, captura de movimento — que exige um time de arte, não uma decisão técnica. |
 | 101 | Animation quality | Pronto | Contínua por construção: sem clipes não há transição para costurar. A passada tem altura vinda da fase do passo, o tronco antecipa a mudança de direção e o desequilíbrio aparece na postura. |
 | 102 | AI animation selection | Pronto | Cada ação tem pose própria e legível: set point do arremesso, extensão da bandeja, braços verticais no toco e no rebote, jab de roubo, cotovelos no boxout, mão de drible seguindo a bola de verdade. |
 | 103 | Micro-reactions | Parcial | Tornozelo quebrado, tropeço, toco, enterrada na cara e mão quente são desenhados sobre o atleta. O resto dos cues ainda só existe no evento. |
