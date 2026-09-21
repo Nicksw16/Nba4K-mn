@@ -1,0 +1,64 @@
+# Publica o jogo no GitHub Pages para abrir de qualquer lugar (inclusive do
+# celular, sem precisar de um computador ligado em casa).
+#
+# Para ativar, uma unica vez:
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+#
+# Depois disso, todo push nesta branch republica o jogo automaticamente.
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches:
+      - claude/stoic-mccarthy-m875or
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar
+        run: npm run build
+
+      - name: Montar o site
+        run: |
+          mkdir -p _site
+          cp index.html manifest.webmanifest icon.svg _site/
+          cp icon-192.png icon-512.png apple-touch-icon.png _site/
+          cp -r dist _site/dist
+          # O Pages serve arquivos estaticos; nenhum passo extra e necessario.
+          echo "Arquivos publicados:" && find _site -maxdepth 2 -type f | head -20
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

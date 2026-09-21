@@ -1,6 +1,7 @@
 /** Servidor estatico minimo para rodar o cliente localmente. */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
+import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, resolve } from 'node:path';
 
 const root = resolve(process.cwd());
@@ -15,7 +16,21 @@ const TYPES: Record<string, string> = {
   '.map': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.ico': 'image/x-icon',
 };
+
+/** Enderecos da maquina na rede local: e por eles que o celular entra. */
+function lanAddresses(): string[] {
+  const out: string[] = [];
+  for (const list of Object.values(networkInterfaces())) {
+    for (const net of list ?? []) {
+      if (net.family !== 'IPv4' || net.internal) continue;
+      out.push(net.address);
+    }
+  }
+  return out;
+}
 
 const server = createServer(async (req, res) => {
   try {
@@ -38,6 +53,25 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, () => {
-  console.log(`COURTSIDE: LEGACY rodando em http://localhost:${port}`);
+server.listen(port, '0.0.0.0', () => {
+  const lan = lanAddresses();
+  console.log('');
+  console.log('  COURTSIDE: LEGACY');
+  console.log('  ' + '='.repeat(52));
+  console.log(`  Neste computador:  http://localhost:${port}`);
+  if (lan.length) {
+    console.log('');
+    console.log('  NO CELULAR (mesma rede Wi-Fi), abra:');
+    for (const ip of lan) console.log(`     http://${ip}:${port}`);
+    console.log('');
+    console.log('  Dica: no celular, use "Adicionar a tela de inicio" para');
+    console.log('  abrir em tela cheia, sem a barra do navegador.');
+  } else {
+    console.log('');
+    console.log('  Nenhuma rede local detectada. Para jogar no celular,');
+    console.log('  conecte o computador ao Wi-Fi e reinicie o servidor.');
+  }
+  console.log('');
+  console.log('  Para parar: Ctrl+C');
+  console.log('');
 });

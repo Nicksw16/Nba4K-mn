@@ -120,8 +120,8 @@ sem arredondar para cima. Legenda:
 | 112 | Economy | Parcial | Duas moedas separadas; sem loja. |
 | 113 | Seasons | Ausente | — |
 | 114 | Cross-system progression | Parcial | Carreira alimenta progressão; os outros modos ainda não se conversam. |
-| 115 | Accessibility | Pronto | Daltonismo, escala de texto, pistas visuais, movimento reduzido, remapeamento. |
-| 116 | Control scheme | Pronto | Teclado e controle produzem o mesmo comando. |
+| 115 | Accessibility | Pronto | Daltonismo, escala de texto, pistas visuais, movimento reduzido, remapeamento, alvos de toque de 44 px. |
+| 116 | Control scheme | Pronto | Toque, teclado e controle produzem o mesmo comando. Analogico flutuante, botoeira contextual e arremesso de ritmo por arrasto no celular. |
 | 117 | Beginner control mode | Pronto | Subconjunto do mesmo sistema. |
 | 118 | Advanced control mode | Pronto | Stick direito para drible, arremesso e finalização. |
 | 119 | Training AI | Parcial | Treinador adaptativo implementado; falta ligar ao loop do treino. |

@@ -1,0 +1,24 @@
+# Compila e roda a suite de testes a cada push.
+name: Testes
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Testes rapidos
+        run: node --test dist/tests/ball.test.js dist/tests/locomotion.test.js dist/tests/systems.test.js dist/tests/progression.test.js dist/tests/franchise.test.js
+      - name: Testes de partida completa
+        run: node --test dist/tests/game.test.js
+        timeout-minutes: 10

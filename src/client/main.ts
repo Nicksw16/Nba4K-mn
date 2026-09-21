@@ -11,14 +11,15 @@ import { DEFAULT_TUNING } from '../core/config/tuning.js';
 import { DEFAULT_SLIDERS, Difficulty, Sliders } from '../core/config/sliders.js';
 import { League, generateLeague } from '../core/data/generator.js';
 import { Team, teamLabel } from '../core/model/team.js';
-import { CameraMode, CameraState, addShake, buildProjection, createCamera, updateCamera } from './render/camera.js';
+import { CameraMode, CameraState, addShake, buildProjection, createCamera, framingFor, updateCamera } from './render/camera.js';
 import {
   ActorRenderInfo, DEFAULT_RENDER_OPTIONS, RenderOptions, TeamColors,
   drawActors, drawArena, drawBall, drawCourt, drawHoops, drawPlayArt,
 } from './render/renderer.js';
 import { HudState, createHudState, drawMatchupInfo, drawPlayerPanel, drawScorebug, drawShotFeedback, drawShotMeter, drawTicker } from './ui/hud.js';
 import { AudioEngine, crowdLevelFor } from './audio/audio.js';
-import { CONTROL_HELP, InputManager } from './input/input.js';
+import { CONTROL_HELP, TOUCH_HELP, InputManager } from './input/input.js';
+import { TouchInput } from './input/touch.js';
 import { el, clear, card, sliderRow, selectRow, table } from './ui/dom.js';
 import { COURT, hoopGround } from '../core/config/court.js';
 import { v2, v3 } from '../core/math/vec.js';
@@ -49,6 +50,9 @@ export class App {
   ctx: CanvasRenderingContext2D;
   ui: HTMLElement;
   input: InputManager;
+  touch: TouchInput;
+  /** True em celular/tablet: muda qualidade, HUD e controles. */
+  readonly isMobile: boolean;
   audio = new AudioEngine();
   camera: CameraState = createCamera();
   render: RenderOptions = { ...DEFAULT_RENDER_OPTIONS };
@@ -79,6 +83,15 @@ export class App {
     this.ctx = this.canvas.getContext('2d', { alpha: false })!;
     this.ui = document.getElementById('ui') as HTMLElement;
     this.input = new InputManager(window);
+    this.touch = new TouchInput(this.ui);
+    this.isMobile = this.touch.enabled;
+    if (this.isMobile) {
+      // Celular: menos custo de render e HUD mais limpo por padrao.
+      this.render.quality = 'medium';
+      this.render.showNames = false;
+      this.input.scheme = 'beginner';
+    }
+    this.touch.setVisible(false);
     this.league = generateLeague('courtside-legacy');
     this.loadSettings();
     this.resize();
@@ -142,6 +155,11 @@ export class App {
   go(screen: Screen): void {
     this.screen = screen;
     clear(this.ui);
+    // `clear` remove a camada de toque junto: recriar e so mostrar no jogo.
+    if (this.touch.enabled) {
+      this.touch = new TouchInput(this.ui);
+      this.touch.setVisible(screen === 'game');
+    }
     switch (screen) {
       case 'main': this.renderMainMenu(); break;
       case 'quickplay': this.renderQuickPlay(); break;
@@ -311,12 +329,21 @@ export class App {
   }
 
   private renderControls(): void {
+    const panels: HTMLElement[] = [];
+    if (this.isMobile) {
+      panels.push(el('div', { class: 'panel' }, [
+        el('h2', { text: 'Toque' }),
+        el('p', { class: 'hint', text: 'A botoeira troca sozinha entre ataque e defesa. Nao ha botao de trocar de modo.' }),
+        table(['Acao', 'Gesto'], TOUCH_HELP.map((c) => [c.action, c.gesture])),
+      ]));
+    }
+    panels.push(el('div', { class: 'panel' }, [
+      el('h2', { text: this.isMobile ? 'Teclado e controle (se conectar um)' : 'Controles' }),
+      table(['Acao', 'Teclado', 'Controle'], CONTROL_HELP.map((c) => [c.action, c.keyboard, c.gamepad])),
+    ]));
     this.ui.appendChild(el('div', { class: 'screen' }, [
       this.brand(),
-      el('div', { class: 'panel' }, [
-        el('h2', { text: 'Controles' }),
-        table(['Acao', 'Teclado', 'Controle'], CONTROL_HELP.map((c) => [c.action, c.keyboard, c.gamepad])),
-      ]),
+      ...panels,
       el('div', { class: 'panel' }, [
         el('h2', { text: 'Como o arremesso funciona' }),
         el('p', { class: 'hint', html: 'O arremesso e de <b>ritmo</b>: segurar acumula o movimento, soltar libera a bola. A janela verde muda de tamanho conforme a marcacao, o equilibrio, a fadiga e a suavidade do proprio gesto. Soltar cedo deixa a bola curta; soltar tarde, longa. Nao existe "botao de acertar".' }),
@@ -396,6 +423,10 @@ export class App {
     this.paused = false;
     this.go('game');
     this.wireGameEvents();
+    if (this.isMobile) {
+      void this.enterImmersiveMode();
+      this.touch.showHint('Analogico na esquerda · arraste ARR para baixo e solte para arremessar');
+    }
   }
 
   private wireGameEvents(): void {
@@ -444,6 +475,21 @@ export class App {
           break;
       }
     });
+  }
+
+  /** Tela cheia e travar na horizontal, quando o navegador permitir. */
+  private async enterImmersiveMode(): Promise<void> {
+    try {
+      const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+      if (!document.fullscreenElement) {
+        if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      }
+      const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      if (orientation?.lock) await orientation.lock('landscape');
+    } catch {
+      // Safari no iOS nao permite nenhum dos dois. O aviso de girar a tela cobre o caso.
+    }
   }
 
   flash(text: string): void {
@@ -505,8 +551,12 @@ export class App {
     const sim = this.sim;
     // Input do usuario com o referencial da camera.
     const yaw = Math.atan2(sim ? 1 : 1, 1) * 0 + Math.PI / 2 * 0; // a camera broadcast olha do -Y para +Y
-    const cmd: UserCommand = this.input.poll(dt, 0);
+    const cmd: UserCommand = this.touch.apply(this.input.poll(dt, 0), dt);
     sim.setUserCommand(cmd);
+    // A botoeira segue o contexto: nao cabe ataque e defesa juntos na tela.
+    if (sim.config.userTeam !== undefined) {
+      this.touch.setMode(sim.possession.team === sim.config.userTeam ? 'offense' : 'defense');
+    }
 
     const scaled = dt * this.sliders.gameSpeed * this.timeScale;
     sim.step(scaled);
@@ -551,7 +601,7 @@ export class App {
     } else if (sim.phase !== 'free_throw' && this.camera.mode === 'free_throw') {
       this.camera.mode = 'broadcast';
     }
-    updateCamera(this.camera, focus, dt, this.accessibility.reducedMotion ? 0.6 : 1);
+    updateCamera(this.camera, focus, dt, this.accessibility.reducedMotion ? 0.6 : 1, this.width / Math.max(1, this.height));
 
     // Shot meter do usuario.
     const handler = sim.ballHandler();
@@ -565,6 +615,7 @@ export class App {
     }
 
     this.input.endFrame();
+    this.touch.endFrame();
   }
 
   private draw(time: number): void {
@@ -573,7 +624,7 @@ export class App {
     const h = this.height;
     drawArena(ctx, w, h, this.render);
 
-    const proj = buildProjection(this.camera, w, h, time);
+    const proj = buildProjection(this.camera, w, h, time, framingFor(w / Math.max(1, h)).shift);
     const colors: [TeamColors, TeamColors] = this.sim
       ? [this.sim.teams[0].identity.colors, this.sim.teams[1].identity.colors]
       : [this.league.teams[0].identity.colors, this.league.teams[1].identity.colors];
@@ -608,14 +659,22 @@ export class App {
     drawActors(ctx, proj, infos, this.render);
     drawBall(ctx, proj, sim.ball, time);
 
+    // O HUD e desenhado em coordenadas logicas e escalado: em tela de celular
+    // o mesmo scorebug ocuparia metade da largura.
+    const uiScale = clamp(Math.min(w / 940, h / 560), 0.58, 1);
+    const lw = w / uiScale;
+    const lh = h / uiScale;
+    ctx.save();
+    ctx.scale(uiScale, uiScale);
     if (!this.render.immersion) {
-      drawScorebug(ctx, sim, w, colors);
-      drawMatchupInfo(ctx, sim, w);
-      if (user) drawPlayerPanel(ctx, user, sim, 16, h - 116);
-      drawTicker(ctx, sim.events.all(), w, h);
+      drawScorebug(ctx, sim, lw, colors);
+      if (!this.isMobile) drawMatchupInfo(ctx, sim, lw);
+      if (user) drawPlayerPanel(ctx, user, sim, 16, this.isMobile ? 78 : lh - 116);
+      if (!this.isMobile) drawTicker(ctx, sim.events.all(), lw, lh);
     }
-    drawShotMeter(ctx, this.hud, w / 2, h - 58);
-    drawShotFeedback(ctx, this.hud, w, h, time);
+    drawShotMeter(ctx, this.hud, lw / 2, lh - (this.isMobile ? 34 : 58));
+    drawShotFeedback(ctx, this.hud, lw, lh, time);
+    ctx.restore();
 
     // Flash de apresentacao.
     const flash = document.getElementById('flash');

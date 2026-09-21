@@ -48,6 +48,30 @@ npm run sim:season   # temporada completa simulada
 npm test             # suíte de testes
 ```
 
+### No celular
+
+O jogo tem controles de toque completos (analógico flutuante, botoeira que troca
+sozinha entre ataque e defesa, arremesso de ritmo por arrasto). Dois caminhos:
+
+**1. Pela rede local** — o computador serve, o celular abre:
+
+```bash
+npm run serve
+```
+
+O terminal imprime o endereço da máquina na rede (algo como
+`http://192.168.0.12:8080`). Abra esse endereço no navegador do celular, com os
+dois aparelhos no mesmo Wi-Fi.
+
+**2. Pelo GitHub Pages** — abre de qualquer lugar, sem computador ligado:
+
+Em `Settings → Pages → Build and deployment`, escolha **Source: GitHub Actions**.
+O workflow `.github/workflows/pages.yml` publica a cada push e devolve o link.
+
+Nos dois casos, use **"Adicionar à tela de início"** no celular: o jogo abre em
+tela cheia, sem a barra do navegador, e trava na horizontal quando o navegador
+permite.
+
 Ferramentas de calibração:
 
 ```bash

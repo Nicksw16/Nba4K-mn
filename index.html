@@ -2,7 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Courtside" />
 <title>COURTSIDE: LEGACY</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23e07a2f' stroke='%23331a08' stroke-width='2'/%3E%3Cpath d='M3 16h26M16 3v26M6 7c8 5 8 13 0 18M26 7c-8 5-8 13 0 18' stroke='%23331a08' stroke-width='1.6' fill='none'/%3E%3C/svg%3E" />
 <style>
@@ -25,7 +30,15 @@
     margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     overflow: hidden; -webkit-font-smoothing: antialiased;
+    /* Em celular: sem zoom por duplo toque, sem puxar para recarregar,
+       sem selecao de texto acidental durante o jogo. */
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
   }
+  /* Respeita o recorte de tela (notch) sem empurrar o canvas. */
+  #ui { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   #app { position: relative; width: 100vw; height: 100vh; }
   canvas#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #ui { position: absolute; inset: 0; pointer-events: none; }
@@ -111,10 +124,97 @@
   #pause .panel { margin: 0; min-width: 380px; }
   .flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 44px; font-weight: 800;
     letter-spacing: 0.1em; color: #fff; text-shadow: 0 6px 30px rgba(255,138,61,0.65); pointer-events: none; opacity: 0; }
+  /* ---------------------------------------------------------------- TOQUE */
+  .touch-layer { position: absolute; inset: 0; z-index: 5; touch-action: none; }
+  .touch-stick {
+    position: absolute; width: 106px; height: 106px; margin: -53px 0 0 -53px;
+    pointer-events: none; z-index: 6;
+  }
+  .touch-stick-base {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.22); background: rgba(10,14,22,0.35);
+    backdrop-filter: blur(2px);
+  }
+  .touch-stick-knob {
+    position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+    border-radius: 50%; background: rgba(240,246,255,0.82);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.45);
+  }
+  .touch-cluster {
+    position: absolute; right: calc(env(safe-area-inset-right) + 104px);
+    bottom: calc(env(safe-area-inset-bottom) + 104px);
+    width: 0; height: 0;
+  }
+  .touch-btn {
+    position: absolute; left: 0; top: 0;
+    --r: 34px;
+    width: calc(var(--r) * 2 * var(--size)); height: calc(var(--r) * 2 * var(--size));
+    margin-left: calc(var(--dx) * var(--r) * 2 - var(--r) * var(--size));
+    margin-top: calc(var(--dy) * var(--r) * 2 - var(--r) * var(--size));
+    border-radius: 50%; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    border: 1.5px solid rgba(255,255,255,0.26);
+    background: rgba(12,17,28,0.34); color: #e6ecf8;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    backdrop-filter: blur(2px);
+    transition: transform 90ms var(--ease), background 90ms var(--ease);
+  }
+  .touch-btn.down { transform: scale(0.92); background: rgba(255,138,61,0.38); }
+  .touch-btn.tone-accent { border-color: rgba(255,138,61,0.8); background: rgba(70,30,10,0.42); }
+  .touch-btn.tone-primary { border-color: rgba(120,180,255,0.5); }
+  .touch-btn.tone-danger { border-color: rgba(255,107,94,0.55); }
+  .touch-btn[hidden] { display: none; }
+  .touch-hint {
+    position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 14px);
+    transform: translateX(-50%); padding: 7px 14px; border-radius: 999px;
+    background: rgba(8,11,18,0.82); border: 1px solid var(--line);
+    font-size: 11.5px; color: var(--muted); opacity: 0; transition: opacity 260ms var(--ease);
+    pointer-events: none; max-width: 68vw; text-align: center; line-height: 1.35;
+  }
+  .touch-hint.show { opacity: 1; }
+
+  /* Aviso de orientacao: basquete em retrato nao da leitura de quadra. */
+  #rotate {
+    position: absolute; inset: 0; z-index: 30; display: none;
+    background: var(--bg); align-items: center; justify-content: center; text-align: center;
+    padding: 32px; flex-direction: column; gap: 14px;
+  }
+  #rotate svg { width: 64px; height: 64px; opacity: 0.75; }
+  #rotate p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 320px; }
+  @media (orientation: portrait) and (max-height: 560px) { #rotate { display: flex; } }
+  @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+
   @media (max-width: 720px) {
     .brand { padding: 24px 20px 4px; }
     .menu, .panel, .toolbar, .hint { padding-left: 20px; padding-right: 20px; margin-left: 20px; margin-right: 20px; }
     .panel { margin-left: 20px; margin-right: 20px; }
+    .brand h1 { font-size: 30px; letter-spacing: 0.08em; }
+    .menu { grid-template-columns: 1fr; gap: 10px; }
+    .card { padding: 14px 16px; }
+    /* Alvos de toque nunca abaixo de 44 px. */
+    button.action, button.ghost { min-height: 46px; padding: 12px 18px; font-size: 15px; }
+    select, input[type="text"], input[type="number"] { min-height: 44px; font-size: 16px; }
+    input[type="range"] { height: 34px; }
+    .row label { min-width: 100%; }
+    .row { gap: 8px; }
+    table { font-size: 11.5px; }
+    th, td { padding: 6px 5px; }
+    .scroll { max-height: 44vh; -webkit-overflow-scrolling: touch; }
+    .badge-list { grid-template-columns: 1fr; }
+    .attr-grid { grid-template-columns: 1fr; }
+  }
+  /* Celular deitado: pouca altura, muita largura. */
+  @media (orientation: landscape) and (max-height: 520px) {
+    .brand { padding: 14px 24px 2px; }
+    .brand h1 { font-size: 24px; }
+    .brand p { font-size: 10px; }
+    .menu { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; padding: 8px 24px 24px; }
+    .card { padding: 11px 13px; }
+    .card h3 { font-size: 14px; }
+    .card p { font-size: 11px; }
+    .panel { padding: 12px 14px; margin: 0 24px 12px; }
+    .touch-cluster { right: calc(env(safe-area-inset-right) + 100px); bottom: calc(env(safe-area-inset-bottom) + 80px); }
+    .touch-btn { --r: 29px; font-size: 10px; }
   }
 </style>
 </head>
@@ -122,6 +222,13 @@
   <div id="app">
     <canvas id="stage"></canvas>
     <div id="ui"></div>
+    <div id="rotate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#8d9bb5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="7" width="18" height="10" rx="2" />
+        <path d="M7 3.5a9 9 0 0 1 10 0M7 20.5a9 9 0 0 0 10 0" />
+      </svg>
+      <p><strong>Vire o celular na horizontal.</strong><br />A leitura de quadra do basquete precisa da tela deitada.</p>
+    </div>
   </div>
   <script type="module" src="./dist/src/client/main.js"></script>
 </body>

@@ -27,6 +27,18 @@ A tendência pessoal deveria pesar mais na fatia de posse.
 - **Treinador adaptativo:** implementado, falta ligar ao loop do modo treino.
 - **Loadouts de badge:** existem no modelo, faltam na interface.
 
+## Prioridade 2.5 — celular
+
+O jogo ja roda e e jogavel no celular (controles de toque, layout responsivo,
+tela cheia, instalavel na tela de inicio). Falta:
+
+- **Vibracao** em contato forte, toco e cesta decisiva (`navigator.vibrate`).
+- **Ajuste de tamanho e posicao dos botoes** pelo usuario, para maos diferentes.
+- **Canhoto:** espelhar analogico e botoeira.
+- **Medicao de desempenho em aparelho real** — o teste atual usa emulacao de
+  toque em Chromium de desktop, que nao diz nada sobre FPS num celular de
+  entrada.
+
 ## Prioridade 3 — apresentação
 
 - Replay visual com o diretor de câmera que já seleciona os lances por drama.

@@ -1,7 +1,37 @@
 # Controles
 
-O mesmo sistema atende iniciante e avançado. O que muda é quanto dele fica
+O mesmo sistema atende toque, teclado e controle. O que muda é quanto dele fica
 exposto — não existe "modo fácil" separado.
+
+## Celular (toque)
+
+Os controles aparecem sozinhos quando o jogo detecta uma tela de toque.
+
+| Ação | Gesto |
+|---|---|
+| Mover | Toque e arraste em **qualquer ponto da metade esquerda** — o analógico nasce onde o dedo encostar |
+| Correr | Empurre o analógico até o fim do curso (ou segure `CORRER`, na defesa) |
+| Arremessar | Segure `ARR`, **arraste para baixo** e solte no tempo certo |
+| Arremesso simples | Se preferir, apenas segure `ARR` e solte: o medidor enche sozinho |
+| Passar | Toque em `PASSE` |
+| Passe alto / alley-oop | Segure `ATACAR` e toque em `PASSE` |
+| Atacar a cesta | Segure `ATACAR` |
+| Move de drible | Arraste `DRIBLE` na direção: lados = crossover, cima = hesitation, baixo = stepback |
+| Jogo de costas | Segure `POSTE` |
+| Pedir bloqueio | Toque em `BLOQ.` |
+| Roubar / tocar | Na defesa a botoeira **troca sozinha**: `ROUBO` e `TOCO` |
+| Trocar de jogador | Toque em `TROCAR` (defesa) |
+
+Três decisões de design que valem explicar:
+
+- **O analógico é flutuante.** Num celular você não vê onde o polegar está; exigir
+  mira num alvo fixo faria você errar o controle toda hora.
+- **Correr não gasta um botão.** É o fim do curso do analógico, como em quase todo
+  jogo de esporte no celular.
+- **A botoeira troca sozinha entre ataque e defesa.** Não cabem as duas na tela, e
+  um botão de "alternar modo" seria uma coisa a mais para errar no meio da jogada.
+
+O jogo pede a tela **na horizontal**: basquete em retrato não dá leitura de quadra.
 
 ## Teclado
 

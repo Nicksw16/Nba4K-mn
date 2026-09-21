@@ -37,6 +37,20 @@ export function createCamera(): CameraState {
   };
 }
 
+/**
+ * Proporcao da tela. Um celular deitado (2,2:1) enxerga pouca profundidade
+ * vertical: a quadra fica achatada no meio com sobra em cima. A camera sobe e
+ * se aproxima para compensar.
+ */
+export function framingFor(aspect: number): { distance: number; height: number; shift: number } {
+  if (aspect <= 1.7) return { distance: 1, height: 1, shift: 0 };
+  const t = Math.min(1, (aspect - 1.7) / 0.8);
+  // `shift` desloca o ponto principal da projecao (o mesmo efeito de uma lente
+  // tilt-shift): sobe a imagem para aproveitar o ceu vazio, sem mudar o
+  // ponto de vista nem distorcer a perspectiva.
+  return { distance: 1 - t * 0.26, height: 1 + t * 0.34, shift: t * 0.11 };
+}
+
 export interface CameraFocus {
   /** Ponto de interesse principal (bola ou atleta travado). */
   ball: Vec3;
@@ -123,8 +137,19 @@ export function desiredCamera(mode: CameraMode, focus: CameraFocus): { pos: Vec3
 }
 
 /** Interpola a camera na direcao do alvo. Nunca corta. */
-export function updateCamera(cam: CameraState, focus: CameraFocus, dt: number, speedScale = 1): void {
-  const d = desiredCamera(cam.mode, focus);
+export function updateCamera(cam: CameraState, focus: CameraFocus, dt: number, speedScale = 1, aspect = 16 / 9): void {
+  const raw = desiredCamera(cam.mode, focus);
+  const frame = framingFor(aspect);
+  // Reenquadra mantendo o alvo: aproxima e sobe conforme a tela e mais larga.
+  const d = {
+    target: raw.target,
+    fov: raw.fov,
+    pos: v3(
+      raw.target.x + (raw.pos.x - raw.target.x) * frame.distance,
+      raw.target.y + (raw.pos.y - raw.target.y) * frame.distance,
+      raw.target.z + (raw.pos.z - raw.target.z) * frame.distance * frame.height,
+    ),
+  };
   // Constantes diferentes por eixo: a camera acompanha o eixo longo mais
   // rapido do que sobe/desce, como um operador real.
   const lambdaXY = (cam.mode === 'player_lock' ? 7 : 2.6) * speedScale;
@@ -151,7 +176,7 @@ export interface Projection {
 }
 
 /** Constroi a matriz de projecao do frame. */
-export function buildProjection(cam: CameraState, width: number, height: number, time: number): Projection {
+export function buildProjection(cam: CameraState, width: number, height: number, time: number, shift = 0): Projection {
   const shakeX = cam.shake > 0 ? Math.sin(time * 41) * cam.shake * 0.11 : 0;
   const shakeY = cam.shake > 0 ? Math.cos(time * 37) * cam.shake * 0.09 : 0;
   const eye = v3(cam.pos.x + shakeX, cam.pos.y, cam.pos.z + shakeY);
@@ -187,7 +212,7 @@ export function buildProjection(cam: CameraState, width: number, height: number,
       const ndcY = (ry / depth) * f;
       return {
         x: width / 2 + ndcX * half * aspect,
-        y: height / 2 - ndcY * half,
+        y: height / 2 - ndcY * half - shift * height,
         scale: (f * half) / depth,
         depth,
       };

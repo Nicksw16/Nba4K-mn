@@ -217,6 +217,22 @@ export class InputManager {
   }
 }
 
+/** Controles de toque, para a tela de ajuda no celular. */
+export const TOUCH_HELP: { action: string; gesture: string }[] = [
+  { action: 'Mover', gesture: 'Toque e arraste em qualquer ponto da metade esquerda (analogico flutuante)' },
+  { action: 'Correr', gesture: 'Empurre o analogico ate o fim do curso, ou segure CORRER na defesa' },
+  { action: 'Arremessar', gesture: 'Segure ARR, arraste para baixo e solte no tempo certo' },
+  { action: 'Arremesso simples', gesture: 'Se preferir, so segure ARR e solte: o medidor enche sozinho' },
+  { action: 'Passar', gesture: 'Toque em PASSE' },
+  { action: 'Passe alto / alley-oop', gesture: 'Segure ATACAR e toque em PASSE' },
+  { action: 'Atacar a cesta', gesture: 'Segure ATACAR' },
+  { action: 'Move de drible', gesture: 'Arraste DRIBLE na direcao: lados = crossover, cima = hesitation, baixo = stepback' },
+  { action: 'Jogo de costas', gesture: 'Segure POSTE' },
+  { action: 'Pedir bloqueio', gesture: 'Toque em BLOQ.' },
+  { action: 'Roubar / tocar', gesture: 'Na defesa a botoeira troca sozinha: ROUBO e TOCO' },
+  { action: 'Trocar de jogador', gesture: 'Toque em TROCAR (defesa)' },
+];
+
 /** Texto de ajuda dos controles (secao 115: acessibilidade/clareza). */
 export const CONTROL_HELP: { action: string; keyboard: string; gamepad: string }[] = [
   { action: 'Mover', keyboard: 'WASD / setas', gamepad: 'Analogico esquerdo' },
