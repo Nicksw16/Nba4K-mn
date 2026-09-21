@@ -699,6 +699,35 @@ export class App {
   }
 }
 
-const app = new App();
-app.start();
-(window as unknown as { courtside: App }).courtside = app;
+/**
+ * Boot com rede de seguranca: se qualquer coisa falhar aqui, a tela de
+ * carregamento vira diagnostico em vez de deixar a pagina preta e muda.
+ */
+declare global {
+  interface Window {
+    courtside?: App;
+    __courtsideBooted?: () => void;
+  }
+}
+
+try {
+  const app = new App();
+  window.courtside = app;
+  app.start();
+  // So remove a tela de carregamento depois do primeiro quadro desenhado: assim
+  // ela cobre tambem uma falha que so apareceria no primeiro render.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => window.__courtsideBooted?.());
+  });
+} catch (err) {
+  const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+  const box = document.getElementById('boot');
+  const msg = document.getElementById('boot-msg');
+  const pre = document.getElementById('boot-err');
+  box?.classList.add('error');
+  if (msg) msg.textContent = 'O jogo nao conseguiu iniciar neste navegador.';
+  if (pre) {
+    pre.hidden = false;
+    pre.textContent = detail.slice(0, 700);
+  }
+}

@@ -43,12 +43,14 @@ export function createCamera(): CameraState {
  * se aproxima para compensar.
  */
 export function framingFor(aspect: number): { distance: number; height: number; shift: number } {
-  if (aspect <= 1.7) return { distance: 1, height: 1, shift: 0 };
+  // Mesmo em 16:9 sobra ceu: o `shift` base joga o enquadramento para cima e
+  // devolve esse espaco para a quadra.
+  if (aspect <= 1.7) return { distance: 1, height: 1, shift: 0.075 };
   const t = Math.min(1, (aspect - 1.7) / 0.8);
   // `shift` desloca o ponto principal da projecao (o mesmo efeito de uma lente
   // tilt-shift): sobe a imagem para aproveitar o ceu vazio, sem mudar o
   // ponto de vista nem distorcer a perspectiva.
-  return { distance: 1 - t * 0.26, height: 1 + t * 0.34, shift: t * 0.11 };
+  return { distance: 1 - t * 0.26, height: 1 + t * 0.34, shift: 0.075 + t * 0.075 };
 }
 
 export interface CameraFocus {
@@ -78,9 +80,9 @@ export function desiredCamera(mode: CameraMode, focus: CameraFocus): { pos: Vec3
       const follow = COURT.length / 2 + (focus.action.x - COURT.length / 2) * 0.62;
       const x = clamp(follow, 9.5, COURT.length - 9.5);
       return {
-        pos: v3(x, -18.5, 12.6),
+        pos: v3(x, -13.6, 8.5),
         target: v3(clamp(focus.action.x, 5, COURT.length - 5) * 0.55 + x * 0.45, mid - 0.4, 1.6),
-        fov: 48,
+        fov: 50,
       };
     }
     case 'action': {

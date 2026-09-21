@@ -59,6 +59,25 @@ NO COMPUTADOR
 
 
 -------------------------------------------------------------------
+SE A TELA NAO SAIR DO "CARREGANDO"
+-------------------------------------------------------------------
+
+  O proprio arquivo se diagnostica. Se algo falhar, ele escreve na tela
+  o motivo, mais o navegador e o endereco que ele detectou.
+
+  Se aparecer uma mensagem de erro ali, me mande esse texto: e ele que
+  diz exatamente o que aconteceu.
+
+  Antes disso, vale tentar:
+
+     - abrir em outro navegador (Chrome, Edge, Firefox ou Safari);
+     - conferir se o arquivo baixou inteiro (tem que ter ~0,3 MB);
+     - no celular, abrir pelo app "Arquivos" e nao pela previa do
+       WhatsApp ou do e-mail, que as vezes mostra so um resumo do
+       arquivo em vez de executa-lo.
+
+
+-------------------------------------------------------------------
 O RESTO DA PASTA (opcional, so se quiser mexer no codigo)
 -------------------------------------------------------------------
 

@@ -20,7 +20,10 @@ const result = await build({
   bundle: true,
   format: 'iife',
   platform: 'browser',
-  target: ['es2022'],
+  // Piso ES2020 (navegadores de 2020 em diante). Nao fixamos versoes de
+  // navegador por nome: o esbuild entao tenta contornar bugs especificos do
+  // Safari 13/14 rebaixando destructuring, o que ele ainda nao sabe fazer.
+  target: ['es2020'],
   minify: true,
   legalComments: 'none',
   write: false,
@@ -30,6 +33,7 @@ const js = result.outputFiles[0].text;
 
 // 2. Le o HTML e inline tudo que viria da rede.
 let html = await readFile(resolve(root, 'index.html'), 'utf8');
+const sourceCloses = (html.match(/<\/script/gi) || []).length;
 
 const svg = await readFile(resolve(root, 'icon.svg'), 'utf8');
 const svgUri = `data:image/svg+xml,${encodeURIComponent(svg)}`;
@@ -38,20 +42,41 @@ const appleUri = `data:image/png;base64,${appleIcon.toString('base64')}`;
 
 // O manifest aponta para arquivos externos: nao faz sentido em arquivo unico.
 html = html.replace(/\n\s*<link rel="manifest"[^>]*>/g, '');
+// ATENCAO: todas as substituicoes usam FUNCAO, nunca string. Numa string de
+// reposicao o `$` e especial ($&, $\', $1...) e o bundle minificado usa `$`
+// como nome de variavel — com string, `$&&a` virava o texto casado + `&a`,
+// injetando um `</script>` no meio do codigo e matando a pagina inteira.
 html = html.replace(/<link rel="apple-touch-icon" href="[^"]*"\s*\/?>/,
-  `<link rel="apple-touch-icon" href="${appleUri}" />`);
+  () => `<link rel="apple-touch-icon" href="${appleUri}" />`);
 html = html.replace(/<link rel="icon" href="[^"]*"\s*\/?>/,
-  `<link rel="icon" href="${svgUri}" />`);
+  () => `<link rel="icon" href="${svgUri}" />`);
 
-// 3. Troca o modulo externo pelo bundle embutido.
+// 3. Troca o modulo externo pelo bundle embutido. `</script` dentro de uma
+//    string do proprio codigo tambem fecharia a tag: quebramos a sequencia.
+const safeJs = js.replace(/<\/(script)/gi, (_m, tag) => `<\\/${tag}`);
 html = html.replace(
   /<script type="module" src="[^"]*"><\/script>/,
-  `<script>\n${js}\n</script>`,
+  () => `<script>\n${safeJs}\n</script>`,
 );
 
-// 4. Aviso claro se algo ainda tentar sair para a rede.
-if (/<script[^>]+src=/.test(html) || /<link[^>]+href="\.\//.test(html)) {
-  console.error('ERRO: sobrou referencia externa no HTML. O arquivo unico nao funcionaria offline.');
+// 4. Aviso claro se algo ainda tentar sair para a rede. Checa apenas as tags
+//    do documento, nao o conteudo do bundle (que pode conter essas letras).
+const head = html.slice(0, html.indexOf('<script>'));
+const leftovers = [
+  ...head.matchAll(/<script[^>]+src=[^>]*>/g),
+  ...head.matchAll(/<link[^>]+href="(?!data:)[^"]*"[^>]*>/g),
+].map((m) => m[0]);
+// O bundle nao pode acrescentar nenhum fechamento de tag: o documento final
+// tem que ter exatamente os mesmos que o index.html original.
+const closes = (html.match(/<\/script/gi) || []).length;
+if (closes !== sourceCloses) {
+  console.error(`ERRO: o documento final tem ${closes} fechamentos de <script> (esperado ${sourceCloses}).`);
+  console.error('   Algum trecho do bundle esta encerrando a tag antes da hora.');
+  process.exit(1);
+}
+if (leftovers.length) {
+  console.error('ERRO: sobrou referencia externa no HTML, o arquivo unico nao funcionaria offline:');
+  for (const l of leftovers) console.error('   ' + l.slice(0, 120));
   process.exit(1);
 }
 

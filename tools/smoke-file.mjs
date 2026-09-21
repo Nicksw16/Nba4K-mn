@@ -21,6 +21,14 @@ console.log('abrindo:', file);
 await page.goto(file);
 await page.waitForTimeout(1500);
 
+// A tela de carregamento so sai quando o primeiro quadro foi desenhado de
+// verdade. Se ela ficou, o jogo nao subiu — e e exatamente o que a pessoa ve.
+const bootLeft = await page.evaluate(() => {
+  const b = document.getElementById('boot');
+  return b ? (document.getElementById('boot-err')?.textContent || 'presa sem erro') : null;
+});
+if (bootLeft) { console.error('FALHOU: tela de carregamento nao saiu ->', bootLeft); process.exit(1); }
+
 console.log('titulo:', await page.textContent('.brand h1'));
 const menu = await page.$$eval('.card h3', (n) => n.map((x) => x.textContent));
 console.log('menu:', menu.join(' | '));
