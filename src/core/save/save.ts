@@ -97,9 +97,27 @@ export class SaveManager {
   private storage: Storage;
 
   constructor() {
-    this.storage = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-      ? new BrowserStorage()
-      : new MemoryStorage();
+    this.storage = SaveManager.canUseLocalStorage() ? new BrowserStorage() : new MemoryStorage();
+  }
+
+  /**
+   * So LER `window.localStorage` ja lanca SecurityError em alguns navegadores
+   * quando a pagina vem de arquivo local ou os dados de site estao bloqueados.
+   * Um `typeof` nao protege: ele avalia o getter do mesmo jeito. Por isso o
+   * teste e uma escrita de verdade dentro de try/catch.
+   */
+  private static canUseLocalStorage(): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+      const ls = window.localStorage;
+      if (!ls) return false;
+      const probe = `${PREFIX}probe`;
+      ls.setItem(probe, '1');
+      ls.removeItem(probe);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private key(kind: string, slot: string): string {

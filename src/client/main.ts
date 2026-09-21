@@ -80,7 +80,11 @@ export class App {
 
   constructor() {
     this.canvas = document.getElementById('stage') as HTMLCanvasElement;
-    this.ctx = this.canvas.getContext('2d', { alpha: false })!;
+    // Sem canvas 2D nao ha jogo. Melhor dizer isso do que estourar em
+    // qualquer chamada de desenho la na frente, com uma pilha ilegivel.
+    const ctx = this.canvas?.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Este navegador nao liberou o canvas 2D, que e o que desenha a quadra.');
+    this.ctx = ctx;
     this.ui = document.getElementById('ui') as HTMLElement;
     this.input = new InputManager(window);
     this.touch = new TouchInput(this.ui);

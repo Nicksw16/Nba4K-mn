@@ -21,10 +21,12 @@ const result = await build({
   bundle: true,
   format: 'iife',
   platform: 'browser',
-  // Piso ES2020 (navegadores de 2020 em diante). Nao fixamos versoes de
-  // navegador por nome: o esbuild entao tenta contornar bugs especificos do
-  // Safari 13/14 rebaixando destructuring, o que ele ainda nao sabe fazer.
-  target: ['es2020'],
+  // Piso ES2017. E mais baixo do que o necessario de proposito: transpila
+  // optional chaining, nullish e atribuicao logica, entao nenhum navegador
+  // dos ultimos anos pode recusar o arquivo por sintaxe. O custo sao poucos
+  // KB. Nao fixamos versoes por nome (ex.: safari14): o esbuild entao tenta
+  // contornar bugs especificos rebaixando destructuring, o que ele nao sabe.
+  target: ['es2017'],
   minify: true,
   legalComments: 'none',
   write: false,
