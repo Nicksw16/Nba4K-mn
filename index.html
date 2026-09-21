@@ -269,24 +269,30 @@
     </div>
   </div>
   <script>
-    /* Rede de seguranca ANTES do jogo carregar: se o navegador nao aguentar o
-       codigo, a pessoa le o motivo na tela em vez de ficar olhando o nada. */
+    /* Rede de seguranca ANTES do jogo carregar. Esta tela precisa responder
+       tres perguntas sozinha: qual arquivo e este, ate onde o jogo chegou, e
+       o que falhou. Sem isso, "nao carrega" nao tem diagnostico possivel. */
     (function () {
       var box = document.getElementById('boot');
       var msg = document.getElementById('boot-msg');
       var pre = document.getElementById('boot-err');
       var env = document.getElementById('boot-env');
       var done = false;
+      var etapa = 'o codigo do jogo nem comecou a rodar';
 
-      if (env) {
-        env.textContent = location.protocol + ' | ' + navigator.userAgent;
-      }
+      /* Carimbo da build, trocado pelo gerador do arquivo unico. Se aparecer
+         com as chaves, e um index.html cru e nao o arquivo distribuido. */
+      var versao = '__BUILD_STAMP__';
+      if (env) env.textContent = 'versao ' + versao + ' | ' + location.protocol + ' | ' + navigator.userAgent;
 
       function report(titulo, detalhe) {
         if (done || !box) return;
         box.className = 'error';
         if (msg) msg.textContent = titulo;
-        if (pre && detalhe) { pre.hidden = false; pre.textContent = String(detalhe).slice(0, 700); }
+        if (pre) {
+          pre.hidden = false;
+          pre.textContent = ('parou em: ' + etapa + '\n\n' + String(detalhe || '')).slice(0, 900);
+        }
       }
 
       window.addEventListener('error', function (e) {
@@ -300,20 +306,35 @@
         report('O jogo falhou ao iniciar.', (r && (r.stack || r.message)) || r);
       });
 
-      /* O bundle chama isso depois do primeiro quadro desenhado de verdade. */
+      /* O bundle vai marcando por onde passou. */
+      window.__courtsideStage = function (nome) {
+        etapa = nome;
+        if (msg && !done && box && box.className !== 'error') msg.textContent = nome + '...';
+      };
+
+      /* Chamado so depois do primeiro quadro desenhado de verdade. */
       window.__courtsideBooted = function () {
+        /* Se ja ha um erro na tela, ele vale mais que o jogo no fundo. */
+        if (box && box.className === 'error') return;
         done = true;
         if (box && box.parentNode) box.parentNode.removeChild(box);
       };
 
       setTimeout(function () {
         if (done || !box || box.className === 'error') return;
-        if (msg) msg.textContent = 'Esta demorando mais que o normal...';
+        box.className = 'error';
+        if (msg) msg.textContent = 'O jogo nao terminou de iniciar.';
         if (pre) {
           pre.hidden = false;
           pre.textContent =
-            'O codigo do jogo nao terminou de iniciar. Se esta tela nao sair, ' +
-            'tente abrir o mesmo arquivo em outro navegador (Chrome, Edge, Firefox ou Safari).';
+            'parou em: ' + etapa + '\n\n' +
+            (etapa === 'o codigo do jogo nem comecou a rodar'
+              ? 'O navegador nao executou o codigo do jogo. Quase sempre isso e ' +
+                'arquivo antigo ou baixado pela metade: apague a copia que voce tem, ' +
+                'baixe de novo (tem que ter cerca de 0,3 MB) e abra o arquivo novo. ' +
+                'Se voce tem mais de uma copia na pasta, confira qual esta abrindo.'
+              : 'O codigo comecou a rodar mas parou nessa etapa. Tente outro ' +
+                'navegador (Chrome, Edge, Firefox ou Safari).');
         }
       }, 8000);
     })();

@@ -92,7 +92,9 @@ export class App {
       this.input.scheme = 'beginner';
     }
     this.touch.setVisible(false);
+    window.__courtsideStage?.('gerando a liga');
     this.league = generateLeague('courtside-legacy');
+    window.__courtsideStage?.('lendo seus ajustes');
     this.loadSettings();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -707,18 +709,29 @@ declare global {
   interface Window {
     courtside?: App;
     __courtsideBooted?: () => void;
+    __courtsideStage?: (nome: string) => void;
   }
 }
 
+/** Marca na tela de carregamento por onde o boot ja passou. */
+const stage = (nome: string): void => window.__courtsideStage?.(nome);
+
 try {
+  stage('montando o jogo');
   const app = new App();
   window.courtside = app;
+  stage('abrindo o menu');
   app.start();
   // So remove a tela de carregamento depois do primeiro quadro desenhado: assim
   // ela cobre tambem uma falha que so apareceria no primeiro render.
+  stage('desenhando o primeiro quadro');
   requestAnimationFrame(() => {
     requestAnimationFrame(() => window.__courtsideBooted?.());
   });
+  // Rede extra: em aba oculta o navegador congela o requestAnimationFrame e a
+  // tela ficaria presa mesmo com o jogo inteiro de pe. Aqui o app ja existe e
+  // qualquer falha do render ja teria sido reportada, entao liberar e correto.
+  setTimeout(() => window.__courtsideBooted?.(), 4000);
 } catch (err) {
   const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
   const box = document.getElementById('boot');

@@ -9,6 +9,7 @@
  */
 import { build } from 'esbuild';
 import { readFile, writeFile, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -51,6 +52,15 @@ html = html.replace(/<link rel="apple-touch-icon" href="[^"]*"\s*\/?>/,
 html = html.replace(/<link rel="icon" href="[^"]*"\s*\/?>/,
   () => `<link rel="icon" href="${svgUri}" />`);
 
+// Carimbo da build: data + digital do bundle. E o que permite saber, so
+// olhando a tela de carregamento, se a pessoa esta abrindo o arquivo novo.
+const stamp = `${new Date().toISOString().slice(0, 10)}.${createHash('sha256').update(js).digest('hex').slice(0, 7)}`;
+if (!html.includes('__BUILD_STAMP__')) {
+  console.error('ERRO: index.html nao tem o marcador __BUILD_STAMP__.');
+  process.exit(1);
+}
+html = html.replaceAll('__BUILD_STAMP__', () => stamp);
+
 // 3. Troca o modulo externo pelo bundle embutido. `</script` dentro de uma
 //    string do proprio codigo tambem fecharia a tag: quebramos a sequencia.
 const safeJs = js.replace(/<\/(script)/gi, (_m, tag) => `<\\/${tag}`);
@@ -83,4 +93,5 @@ if (leftovers.length) {
 await writeFile(out, html, 'utf8');
 const info = await stat(out);
 console.log(`Gerado: ${out}`);
+console.log(`Versao: ${stamp}`);
 console.log(`Tamanho: ${(info.size / 1024 / 1024).toFixed(2)} MB (um unico arquivo, sem dependencias)`);

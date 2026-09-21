@@ -62,16 +62,24 @@ NO COMPUTADOR
 SE A TELA NAO SAIR DO "CARREGANDO"
 -------------------------------------------------------------------
 
-  O proprio arquivo se diagnostica. Se algo falhar, ele escreve na tela
-  o motivo, mais o navegador e o endereco que ele detectou.
+  O proprio arquivo se diagnostica. Depois de 8 segundos ele para de
+  girar e escreve na tela em QUE ETAPA travou, junto com a versao do
+  arquivo, o navegador e o endereco. Me manda esse texto: e ele que diz
+  exatamente o que aconteceu.
 
-  Se aparecer uma mensagem de erro ali, me mande esse texto: e ele que
-  diz exatamente o que aconteceu.
+  A causa mais comum e simples: e uma copia antiga do arquivo. Toda vez
+  que eu mando uma versao nova, o navegador costuma salvar ao lado da
+  antiga com "(1)" no nome, e o clique duplo acaba abrindo a velha.
 
-  Antes disso, vale tentar:
+     - apague as copias antigas da pasta de downloads;
+     - confira que o arquivo tem cerca de 0,3 MB (se tiver poucos KB,
+       baixou pela metade);
+     - a tela de carregamento mostra "versao AAAA-MM-DD.xxxxxxx" -- se a
+       data nao for a do arquivo que acabei de mandar, e a copia velha.
+
+  Outras coisas que valem tentar:
 
      - abrir em outro navegador (Chrome, Edge, Firefox ou Safari);
-     - conferir se o arquivo baixou inteiro (tem que ter ~0,3 MB);
      - no celular, abrir pelo app "Arquivos" e nao pela previa do
        WhatsApp ou do e-mail, que as vezes mostra so um resumo do
        arquivo em vez de executa-lo.
