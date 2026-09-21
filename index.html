@@ -30,6 +30,7 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text);
+    min-height: 100dvh;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     overflow: hidden; -webkit-font-smoothing: antialiased;
     /* Em celular: sem zoom por duplo toque, sem puxar para recarregar,
@@ -41,7 +42,16 @@
   }
   /* Respeita o recorte de tela (notch) sem empurrar o canvas. */
   #ui { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  #app { position: relative; width: 100vw; height: 100vh; }
+  /*
+   * 100dvh, NAO 100vh.
+   *
+   * No celular `100vh` e a altura da janela SEM as barras do navegador. Com a
+   * barra de endereco na tela, o fim do #app fica atras dela: um rodape
+   * grudado em `bottom: 0` e desenhado fora da area visivel -- existe, mas o
+   * dedo nunca alcanca. `dvh` acompanha as barras aparecendo e sumindo.
+   * O `100vh` fica antes como reserva para navegador que nao conhece `dvh`.
+   */
+  #app { position: relative; width: 100vw; height: 100vh; height: 100dvh; }
   canvas#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #ui { position: absolute; inset: 0; pointer-events: none; }
   #ui > * { pointer-events: auto; }
@@ -123,6 +133,16 @@
   .tier { font-size: 10px; color: var(--accent); letter-spacing: 0.08em; }
 
   .toolbar { display: flex; gap: 10px; padding: 0 48px 22px; flex-wrap: wrap; }
+  /*
+   * Bloco depois da barra de acao. Existe para haver para onde rolar: com o
+   * botao encostado no fim do conteudo, o que a barra do navegador cobre fica
+   * inalcancavel. Rolando um pouco mais, o botao -- que continua grudado --
+   * sobe para o meio do polegar. O texto e informacao de verdade; encher com
+   * enfeite contraria a regra do proprio projeto.
+   */
+  .footroom { padding: 16px 48px 34px; color: #55627a; font-size: 11.5px; line-height: 1.6; max-width: 900px; }
+  .footroom p { margin: 0 0 5px; }
+  .footroom .versao { margin-top: 10px; font-variant-numeric: tabular-nums; opacity: 0.7; }
   .hint { color: var(--muted); font-size: 12px; padding: 0 48px 12px; max-width: 900px; line-height: 1.5; }
   .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); }
   .scroll { overflow: auto; max-height: 52vh; }
@@ -288,6 +308,9 @@
        No celular existe UMA superficie de rolagem, a da propria tela.
        Nao pode ficar na media query por largura: celular deitado e largo. */
     .scroll { max-height: none; overflow: visible; }
+    /* A folga aqui e o que garante alcance quando a barra do navegador entra
+       na tela: sempre sobra o que rolar depois do botao. */
+    .footroom { padding: 14px 24px calc(56px + env(safe-area-inset-bottom)); }
   }
 </style>
 </head>
@@ -325,6 +348,7 @@
       /* Carimbo da build, trocado pelo gerador do arquivo unico. Se aparecer
          com as chaves, e um index.html cru e nao o arquivo distribuido. */
       var versao = '__BUILD_STAMP__';
+      window.__courtsideVersao = versao;
       if (env) env.textContent = 'versao ' + versao + ' | ' + location.protocol + ' | ' + navigator.userAgent;
 
       function report(titulo, detalhe) {

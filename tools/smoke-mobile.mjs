@@ -22,6 +22,7 @@ const falhas = [];
 for (const [nome, w, h] of TELAS) {
   const ctx = await browser.newContext({ ...devices['iPhone 12'], viewport: { width: w, height: h }, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
   page.on('pageerror', (e) => falhas.push(`${nome}: erro de pagina ${e.message}`));
   await page.goto(file);
   await page.waitForTimeout(1200);
@@ -47,13 +48,32 @@ for (const [nome, w, h] of TELAS) {
     .map((b) => (b.textContent || '').trim()));
   if (fora.length) falhas.push(`${nome}: acao fora da tela -> ${fora.join(', ')}`);
 
-  // 3. O toque tem que iniciar a partida de verdade.
+  // 3. Com a barra do navegador na tela, a area util encolhe ~56 px e um
+  //    rodape grudado fica atras dela. Tem que sobrar o que rolar depois do
+  //    botao, para ele subir para dentro do alcance.
+  const UTIL = h - 56;
+  for (let volta = 0; volta < 6; volta++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: w / 2, y: h * 0.75 }] });
+    for (let i = 1; i <= 8; i++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: w / 2, y: h * 0.75 - i * (h * 0.06) }] });
+      await page.waitForTimeout(12);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(200);
+  }
+  const fim = await page.evaluate(() => Math.round(
+    document.querySelector('.screen > .toolbar button').getBoundingClientRect().bottom));
+  if (fim > UTIL) falhas.push(`${nome}: com barra do navegador o botao termina em ${fim}px, fora dos ${UTIL}px uteis`);
+
+  // 4. O toque tem que iniciar a partida de verdade.
+  await page.evaluate(() => { document.querySelector('.screen').scrollTop = 0; });
+  await page.waitForTimeout(200);
   await page.tap('text=Iniciar partida');
   await page.waitForTimeout(2500);
   const tela = await page.evaluate(() => window.courtside?.screen);
   if (tela !== 'game') falhas.push(`${nome}: toque em "Iniciar partida" nao iniciou (tela=${tela})`);
 
-  // 4. Botao de toque colado na borda cai na faixa de gestos do sistema.
+  // 5. Botao de toque colado na borda cai na faixa de gestos do sistema.
   const colados = await page.evaluate(() => [...document.querySelectorAll('.touch-btn:not([hidden])')]
     .map((b) => { const r = b.getBoundingClientRect(); return { t: (b.textContent || '').trim(), d: Math.round(innerWidth - r.right), b: Math.round(innerHeight - r.bottom) }; })
     .filter((x) => x.d < 10 || x.b < 10));

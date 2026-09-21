@@ -178,6 +178,35 @@ export class App {
       case 'practice': openPractice(this.context()); break;
       case 'game': this.renderGameOverlay(); break;
     }
+    this.addFootroom();
+  }
+
+  /**
+   * Espaco rolavel DEPOIS da barra de acao.
+   *
+   * A barra fica grudada no rodape, mas em celular a barra do navegador
+   * aparece e some e come uns 50 px sem avisar. Com o botao encostado no fim
+   * do conteudo nao ha para onde rolar, entao o que a barra do navegador
+   * cobre fica inalcancavel. Com conteudo depois dele, a pessoa rola mais um
+   * pouco e traz o botao para o meio do polegar -- e o botao continua
+   * grudado, porque `sticky` so solta no fim do bloco.
+   *
+   * O que vai aqui e informacao de verdade: versao do arquivo, o que o motor
+   * esta rodando e o lembrete de controle. Encher com texto decorativo
+   * contraria a regra do proprio projeto (secao 135).
+   */
+  private addFootroom(): void {
+    const screen = this.ui.querySelector('.screen');
+    if (!screen || !screen.querySelector(':scope > .toolbar')) return;
+    const hz = Math.round(1 / DEFAULT_TUNING.sim.dt);
+    const dicas = this.isMobile
+      ? TOUCH_HELP.slice(0, 3).map((h) => `${h.action}: ${h.gesture}`)
+      : CONTROL_HELP.slice(0, 3).map((h) => `${h.action}: ${h.keyboard}`);
+    screen.appendChild(el('div', { class: 'footroom' }, [
+      ...dicas.map((t) => el('p', { text: t })),
+      el('p', { text: `Simulacao a ${hz} Hz com passo fixo; o render interpola por frame. Times, atletas e arenas sao ficticios e gerados proceduralmente a partir de uma semente.` }),
+      el('p', { class: 'versao', text: window.__courtsideVersao ? `versao ${window.__courtsideVersao}` : 'COURTSIDE: LEGACY' }),
+    ]));
   }
 
   // ------------------------------------------------------------------ telas
@@ -714,6 +743,7 @@ declare global {
     courtside?: App;
     __courtsideBooted?: () => void;
     __courtsideStage?: (nome: string) => void;
+    __courtsideVersao?: string;
   }
 }
 
