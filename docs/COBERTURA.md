@@ -123,9 +123,9 @@ Estado atual: **84 prontas, 36 parciais, 21 ausentes**.
 | 113 | Seasons | Ausente | — |
 | 114 | Cross-system progression | Parcial | Carreira alimenta progressão; os outros modos ainda não se conversam. |
 | 115 | Accessibility | Pronto | Daltonismo, escala de texto, pistas visuais, movimento reduzido, remapeamento, alvos de toque de 44 px. |
-| 116 | Control scheme | Pronto | Toque, teclado e controle produzem o mesmo comando. Analogico flutuante, botoeira contextual e arremesso de ritmo por arrasto no celular. |
+| 116 | Control scheme | Pronto | Toque, teclado, mouse e controle produzem o mesmo comando. Analógico flutuante e botoeira contextual no celular; no computador as setas são o analógico direito e o mouse mira e passa por ícone. |
 | 117 | Beginner control mode | Pronto | Subconjunto do mesmo sistema. |
-| 118 | Advanced control mode | Pronto | Stick direito para drible, arremesso e finalização. |
+| 118 | Advanced control mode | Pronto | Stick direito para drible, arremesso e finalização — no controle e também no teclado, pelas setas. Direção escolhe a família do move, modificadores escolhem a variação. |
 | 119 | Training AI | Parcial | Treinador adaptativo implementado; falta ligar ao loop do treino. |
 | 120 | Game balance | Pronto | Habilidade pesa mais que número bruto, sem anular o número. |
 | 121 | Anti-cheese | Pronto | Repetição encarece, stamina e adrenalina limitam, defesa se adapta. |

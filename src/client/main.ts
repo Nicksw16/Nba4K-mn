@@ -14,7 +14,7 @@ import { Team, teamLabel } from '../core/model/team.js';
 import { CameraMode, CameraState, addShake, buildProjection, createCamera, framingFor, updateCamera } from './render/camera.js';
 import {
   ActorRenderInfo, DEFAULT_RENDER_OPTIONS, RenderOptions, TeamColors,
-  drawActors, drawBall, drawCourt, drawHoops, drawPlayArt,
+  drawActors, drawBall, drawCourt, drawHoops, drawPlayArt, drawPointer,
 } from './render/renderer.js';
 import { HudState, createHudState, drawMatchupInfo, drawPlayerPanel, drawScorebug, drawShotFeedback, drawShotMeter, drawTicker } from './ui/hud.js';
 import { AudioEngine, crowdLevelFor } from './audio/audio.js';
@@ -71,6 +71,10 @@ export class App {
   private idleCameraAngle = 0;
   /** Energia da torcida amortecida: a arquibancada nao levanta num quadro. */
   private crowdEnergy = 0.25;
+  /** Cursor em pixels do canvas, para desprojetar na quadra. */
+  private mouse: { x: number; y: number } | null = null;
+  /** Ultima projecao usada no desenho, reaproveitada para desprojetar. */
+  private lastProj: ReturnType<typeof buildProjection> | null = null;
   private flashText = '';
   private flashUntil = 0;
   accessibility = {
@@ -105,6 +109,11 @@ export class App {
     this.loadSettings();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    // O mouse so importa no computador: no celular nao existe cursor.
+    if (!this.isMobile) {
+      window.addEventListener('mousemove', (e) => { this.mouse = { x: e.clientX, y: e.clientY }; });
+      window.addEventListener('mouseleave', () => { this.mouse = null; });
+    }
     // WebAudio exige gesto do usuario.
     const unlock = () => {
       void this.audio.start();
@@ -563,6 +572,38 @@ export class App {
     requestAnimationFrame(frame);
   }
 
+  /**
+   * Traduz o cursor em algo que o jogo entende: o ponto da quadra sob ele e,
+   * se houver, o companheiro apontado. Sem isso o mouse seria decorativo.
+   */
+  private updatePointer(sim: GameSim): void {
+    this.input.pointer = null;
+    this.input.pointerTeammate = null;
+    if (this.isMobile || !this.mouse || !this.lastProj) return;
+
+    const ground = this.lastProj.unproject(this.mouse.x, this.mouse.y);
+    if (!ground) return;
+    this.input.pointer = { x: ground.x, y: ground.y };
+
+    // Companheiro mais proximo do cursor EM TELA, nao no mundo: o que vale e
+    // o que a pessoa ve sob o ponteiro.
+    const user = sim.userActor();
+    if (!user) return;
+    let melhor = -1;
+    // Raio em pixels de tela (CSS), que e a mesma unidade de clientX/clientY
+    // e da projecao. Multiplicar por devicePixelRatio aqui dobrava o alcance
+    // em tela retina e o cursor "pegava" companheiro do outro lado da quadra.
+    let menor = 70;
+    for (const a of sim.onCourtActors(user.team)) {
+      if (a.id === user.id) continue;
+      const p = this.lastProj.project(v3(a.pos.x, a.pos.y, 1));
+      if (!p) continue;
+      const d = Math.hypot(p.x - this.mouse.x, p.y - this.mouse.y);
+      if (d < menor) { menor = d; melhor = a.slot; }
+    }
+    if (melhor >= 0) this.input.pointerTeammate = melhor;
+  }
+
   private update(dt: number, time: number): void {
     this.audio.update(dt);
 
@@ -589,6 +630,7 @@ export class App {
     const sim = this.sim;
     // Input do usuario com o referencial da camera.
     const yaw = Math.atan2(sim ? 1 : 1, 1) * 0 + Math.PI / 2 * 0; // a camera broadcast olha do -Y para +Y
+    this.updatePointer(sim);
     const cmd: UserCommand = this.touch.apply(this.input.poll(dt, 0), dt);
     sim.setUserCommand(cmd);
     // A botoeira segue o contexto: nao cabe ataque e defesa juntos na tela.
@@ -664,6 +706,7 @@ export class App {
     drawHall(ctx, w, h);
 
     const proj = buildProjection(this.camera, w, h, time, framingFor(w / Math.max(1, h)).shift);
+    this.lastProj = proj;
     const colors: [TeamColors, TeamColors] = this.sim
       ? [this.sim.teams[0].identity.colors, this.sim.teams[1].identity.colors]
       : [this.league.teams[0].identity.colors, this.league.teams[1].identity.colors];
@@ -713,6 +756,14 @@ export class App {
     // quique e o braco nunca divergem.
     drawActors(ctx, proj, infos, this.render, sim.ball.pos, time);
     drawBall(ctx, proj, sim.ball, time);
+
+    // Mira do mouse: onde o cursor toca a quadra e quem ele esta apontando.
+    if (!this.isMobile && !this.render.immersion) {
+      const alvo = this.input.pointerTeammate !== null
+        ? sim.onCourtActors(sim.userActor()?.team ?? 0).find((a) => a.slot === this.input.pointerTeammate)
+        : undefined;
+      drawPointer(ctx, proj, this.input.pointer, alvo ? { x: alvo.pos.x, y: alvo.pos.y } : null, time);
+    }
 
 
     // O HUD e desenhado em coordenadas logicas e escalado: em tela de celular

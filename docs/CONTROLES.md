@@ -33,25 +33,62 @@ Três decisões de design que valem explicar:
 
 O jogo pede a tela **na horizontal**: basquete em retrato não dá leitura de quadra.
 
-## Teclado
+## Teclado e mouse
 
 | Ação | Tecla |
 |---|---|
-| Mover | `W` `A` `S` `D` ou setas |
+| Mover | `W` `A` `S` `D` |
 | Correr | `Shift` |
-| Arremessar (ritmo) | Segurar e soltar `Espaço` |
+| Arremessar (ritmo) | Segurar e soltar `Espaço`, `↓` ou o **botão direito do mouse** |
 | Passar | `J` |
+| Passar para um companheiro | `1`–`5`, ou **clicar nele** |
+| Alley-oop | `Shift` + `J` |
 | Atacar a cesta | `K` |
 | Roubar (defendendo) | `J` |
 | Tocar (defendendo) | `Espaço` |
 | Jogo de costas | `L` |
 | Pedir bloqueio | `E` |
 | Trocar de jogador | `Q` |
-| Move de drible | `Z` / `X` |
 | Trocar câmera | `C` |
 | Tempo técnico | `T` |
 | Falta intencional | `F` |
 | Pausar | `Esc` |
+
+### As setas são o analógico direito
+
+No esquema avançado o `WASD` anda e as **setas driblam**. É o que permite ao
+teclado alcançar os 28 moves do simulador, em vez de um só.
+
+| Gesto | Move |
+|---|---|
+| `←` / `→` | Crossover |
+| `←` / `→` + `Shift` | Behind the back |
+| Dois toques em `←` / `→` (320 ms) | Duplo crossover |
+| Dois toques + `Shift` | Misdirection crossover |
+| `↑` | Hesitação |
+| `↑` + `Shift` | Moving cross spin |
+| `↓` + `←` / `→` | Stepback |
+| `↓` + `←` / `→` + `Shift` | Stepback crossover |
+| Qualquer um deles segurando `L` | A versão de **escape** do move |
+
+A direção escolhe a família, os modificadores escolhem a variação. É a mesma
+gramática do controle — não existe um terceiro esquema para decorar.
+
+No esquema iniciante as setas continuam andando, como antes.
+
+### O mouse
+
+No computador o mouse era o recurso mais desperdiçado: parado, enquanto o
+teclado fazia tudo. Agora o cursor é desprojetado no plano do chão, então ele
+tem posição na quadra de verdade.
+
+- Um anel marca **onde o cursor toca a quadra**.
+- Passando sobre um companheiro, um losango verde o marca; **clicar passa para
+  ele**. É passe por ícone sem decorar número.
+- Botão direito segura e solta o arremesso, igual ao analógico.
+
+Dá para mirar o passe com o mouse enquanto o `WASD` corre para o outro lado —
+o que o teclado sozinho não permitia.
 
 ## Controle
 

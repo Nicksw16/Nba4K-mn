@@ -173,6 +173,13 @@ export function addShake(cam: CameraState, amount: number): void {
 export interface Projection {
   /** Projeta um ponto do mundo para a tela. Retorna null se atras da camera. */
   project(p: Vec3): { x: number; y: number; scale: number; depth: number } | null;
+  /**
+   * Caminho inverso: de um pixel da tela para o ponto do CHAO que esta sob
+   * ele. E o que transforma o mouse num recurso de jogo -- sem isso o cursor
+   * nao tem nenhuma relacao com a quadra. Devolve null se o raio apontar para
+   * cima do horizonte, que e quando nao cruza o chao.
+   */
+  unproject(x: number, y: number, z?: number): Vec3 | null;
   width: number;
   height: number;
 }
@@ -218,6 +225,24 @@ export function buildProjection(cam: CameraState, width: number, height: number,
         scale: (f * half) / depth,
         depth,
       };
+    },
+    unproject(sx: number, sy: number, planeZ = 0) {
+      // Desfaz a projecao para achar a direcao do raio no espaco da camera...
+      const ndcX = (sx - width / 2) / (half * aspect);
+      const ndcY = -(sy - height / 2 + shift * height) / half;
+      const cx = (ndcX * aspect) / f;
+      const cy = ndcY / f;
+      // ...e converte para o mundo com a mesma base usada na ida.
+      const dir = v3(
+        forward.x + right.x * cx + up.x * cy,
+        forward.y + right.y * cx + up.y * cy,
+        forward.z + right.z * cx + up.z * cy,
+      );
+      // Intersecao com o plano horizontal.
+      if (Math.abs(dir.z) < 1e-5) return null;
+      const t = (planeZ - eye.z) / dir.z;
+      if (t <= 0) return null;
+      return v3(eye.x + dir.x * t, eye.y + dir.y * t, planeZ);
     },
   };
 }

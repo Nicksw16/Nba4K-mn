@@ -47,18 +47,45 @@ NO COMPUTADOR
 
   Dois cliques em COURTSIDE-LEGACY.html.
 
-  CONTROLES DE TECLADO
+  CONTROLES DE TECLADO E MOUSE
 
-     WASD ou setas .... mover
+     WASD ............. mover
      Shift ............ correr
      Espaco ........... segurar e soltar para arremessar (ritmo)
      J ................ passar (ou roubar, defendendo)
+     1 a 5 ............ passar para aquele companheiro
+     CLIQUE ........... passar para quem estiver sob o cursor
+     BOTAO DIREITO .... segurar e soltar para arremessar
      K ................ atacar a cesta
-     Z / X ............ move de drible
+     L ................ jogo de costas (e modificador de escape)
+     E ................ pedir bloqueio
      Q ................ trocar de jogador
      C ................ trocar camera
      T ................ tempo tecnico
+     F ................ falta proposital
      Esc .............. pausar
+
+  AS SETAS SAO O STICK DIREITO
+
+     No esquema avancado o WASD anda e as SETAS driblam. E assim que o
+     teclado alcanca os 28 moves do simulador em vez de um so.
+
+        Seta lateral ............... crossover
+        Seta lateral + Shift ....... behind the back
+        Dois toques na lateral ..... duplo crossover
+        Seta cima .................. hesitacao
+        Seta cima + Shift .......... cross spin
+        Seta baixo + lateral ....... stepback
+        Seta baixo ................. arremesso (mesmo gesto do stick)
+        Segurando L ................ versao de escape do move
+
+     No esquema iniciante as setas continuam andando, como antes.
+
+  O MOUSE
+
+     Onde o cursor toca a quadra aparece um anel. Quando ele passa sobre
+     um companheiro, um losango verde marca o atleta: clicar passa para
+     ele. Da para mirar o passe enquanto corre para o outro lado.
 
   Se conectar um controle, ele funciona automaticamente.
 

@@ -323,6 +323,53 @@ function drawActorDebug(ctx: Ctx, proj: Projection, a: Actor): void {
   ctx.restore();
 }
 
+/**
+ * Retorno do mouse na quadra (secao 135: o que responde tem que aparecer).
+ *
+ * Um anel no ponto apontado e um losango sobre o companheiro sob o cursor.
+ * Sem esse retorno o passe por clique seria adivinhacao: a pessoa clica e
+ * torce. Com ele, da para mirar antes de apertar.
+ */
+export function drawPointer(
+  ctx: Ctx,
+  proj: Projection,
+  ground: { x: number; y: number } | null,
+  target: { x: number; y: number } | null,
+  time: number,
+): void {
+  if (ground) {
+    const p = proj.project(v3(ground.x, ground.y, 0.02));
+    if (p) {
+      const r = p.scale * 0.22;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(190,215,255,0.55)';
+      ctx.lineWidth = Math.max(1, p.scale * 0.012);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, r, r * 0.38, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  if (target) {
+    const p = proj.project(v3(target.x, target.y, 2.35));
+    if (!p) return;
+    const s = Math.max(5, p.scale * 0.085);
+    const bob = Math.sin(time * 5) * s * 0.16;
+    ctx.save();
+    ctx.translate(p.x, p.y + bob);
+    ctx.fillStyle = 'rgba(126,246,192,0.92)';
+    ctx.beginPath();
+    ctx.moveTo(0, s);
+    ctx.lineTo(-s * 0.62, 0);
+    ctx.lineTo(0, -s);
+    ctx.lineTo(s * 0.62, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 export function drawBall(ctx: Ctx, proj: Projection, ball: Ball, time: number): void {
   const s = proj.project(ball.pos);
   if (!s) return;

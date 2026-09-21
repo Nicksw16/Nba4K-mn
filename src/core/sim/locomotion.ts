@@ -217,6 +217,11 @@ export function stepLocomotion(a: Actor, intent: LocomotionIntent, dt: number, t
   // --- 10. Estado de locomocao ------------------------------------------------
   if (a.state !== 'stumble' && a.state !== 'gather' && a.state !== 'screen' && a.state !== 'boxout' && a.state !== 'down') {
     if (!a.grounded) a.state = 'jump';
+    // Jogo de costas e postura, nao acao: precisa sobreviver ao frame seguinte.
+    // Escrever `posture_post` uma vez e deixar a locomocao reescrever depois
+    // fazia o botao de poste parecer que nao funcionava.
+    else if (intent.stance === 'post') a.state = 'posture_post';
+    else if (intent.stance === 'boxout') a.state = 'boxout';
     else if (intent.stance === 'defense') a.state = speed > 0.6 ? 'shuffle' : 'idle';
     else if (speed < 0.35) a.state = 'idle';
     else if (speed < 2.1) a.state = 'walk';

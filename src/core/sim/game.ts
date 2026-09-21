@@ -12,7 +12,7 @@
  * acontecem em bola morta, e mesmo assim andando ate a posicao.
  */
 import { Vec2, Vec3, add2, dist2, dot2, fromAngle, len2, mul2, norm2, sub2, toAngle, v2, v3, angleDiff } from '../math/vec.js';
-import { clamp, clamp01, lerp } from '../math/util.js';
+import { attr01, clamp, clamp01, lerp } from '../math/util.js';
 import { Rng } from '../math/rng.js';
 import { Tuning } from '../config/tuning.js';
 import { AiProfile, AssistProfile, Sliders, aiProfile, applySliders, assistProfile, shotSuccessMultiplier } from '../config/sliders.js';
@@ -425,6 +425,8 @@ export class GameSim {
   // --------------------------------------------------------------- decisoes
 
   private think(): void {
+    // Antes de qualquer decisao: quem e o corpo do humano neste instante.
+    this.refreshUserControl();
     const off = this.possession.team;
     const def = (1 - off) as 0 | 1;
     const offense = this.onCourtActors(off);
@@ -546,10 +548,169 @@ export class GameSim {
       this.executeDefensiveDecision(d, decision, view);
     }
 
+    // O humano, pelos MESMOS caminhos que a IA acabou de usar.
+    this.applyUserCommand(view);
+
+
     // Tecnico: uma vez a cada 15 s de jogo (nao a cada frame dentro do segundo).
     if (this.simTime - this.lastCoachTick >= 15) {
       this.lastCoachTick = this.simTime;
       this.coachTick(off);
+    }
+  }
+
+  /**
+   * ACOES DO HUMANO.
+   *
+   * A IA pula quem o humano controla (`if (a.userControlled) continue`), e por
+   * muito tempo nada ocupou esse lugar: so `move`, `sprint` e o arremesso eram
+   * lidos. Passe, drible, ataque a cesta, poste, pedido de bloqueio, roubo e
+   * toco existiam no comando e nao chegavam a lugar nenhum -- botao que nao faz
+   * nada, exatamente o que a secao 135 proibe.
+   *
+   * Tudo aqui chama as mesmas funcoes que `executeOffensiveDecision` e
+   * `executeDefensiveDecision` chamam. O humano nao tem caminho privilegiado:
+   * o mesmo roubo tem a mesma chance de falta, o mesmo passe passa pelo mesmo
+   * `planPass` com os mesmos defensores na linha.
+   */
+  private applyUserCommand(view: CourtView): void {
+    const a = this.userActor();
+    if (!a || !a.onCourt || this.phase !== 'live') return;
+    const cmd = this.userCommand;
+    // Acao comprometida nao se cancela: e o que impede spam de botao.
+    if (a.action.kind !== 'none' && a.action.committed) return;
+
+    if (a.hasBall) {
+      if (cmd.passRequested) {
+        const target = this.userPassTarget(a, cmd.passTargetSlot);
+        if (target) {
+          this.beginPass(a, target, cmd.lobRequested);
+          return;
+        }
+      }
+
+      if (cmd.moveRequest && a.action.kind === 'none') {
+        const hoop = hoopGround(this.attackingSide(a.team));
+        startDribbleMove(a, cmd.moveRequest.id, cmd.moveRequest.side, norm2(sub2(hoop, a.pos)), this.t, this.rng);
+        return;
+      }
+
+      // Ataque a cesta: com alcance, finaliza; sem alcance, e so corrida, e
+      // o proprio movimento ja faz isso. Nao inventamos teleporte.
+      if (cmd.driveRequested && a.action.kind === 'none') {
+        const hoop = hoopGround(this.attackingSide(a.team));
+        if (dist2(a.pos, hoop) < 4.2) {
+          this.beginShot(a, view);
+          return;
+        }
+      }
+
+      if (cmd.postUp) {
+        a.state = 'posture_post';
+        return;
+      }
+      return;
+    }
+
+    // --- Sem a bola ---------------------------------------------------------
+    const mine = this.onCourtActors(a.team).filter((x) => x.id !== a.id);
+
+    if (cmd.callScreen && this.possession.team === a.team) {
+      // O companheiro mais proximo vem armar o bloqueio.
+      const helper = mine
+        .filter((x) => !x.hasBall)
+        .sort((x, y) => dist2(x.pos, a.pos) - dist2(y.pos, a.pos))[0];
+      if (helper) setScreen(helper, this.decisionInterval);
+    }
+
+    const handler = view.ballHandler;
+    if (handler && handler.team !== a.team) {
+      if (cmd.stealRequested) {
+        const ready = (this.stealCooldown.get(a.id) ?? -99) + 4 < this.simTime;
+        if (ready && dist2(a.pos, handler.pos) < 1.8) {
+          this.stealCooldown.set(a.id, this.simTime);
+          const exposure = handler.action.kind === 'dribble_move'
+            ? (MOVE_BY_ID.get(String(handler.action.data.moveId))?.exposure ?? 0.3)
+            : 0.22;
+          const stance = chooseStance(a, handler, view.attackingSide, this.t, this.gameplans[a.team].foulTolerance);
+          const result = attemptSteal(a, handler, exposure, this.t, this.rng, stance.posture);
+          startAction(a, 'steal_attempt', 0.35, 0.05, {}, true);
+          if (result.success) this.resolveSteal(a, handler);
+          else if (result.foul) this.callFoul(a, handler, 'reach_in', false, 2);
+          return;
+        }
+      }
+
+      // Toco: o botao faz o corpo SALTAR. Quem resolve o toco e a mesma conta
+      // de sempre, que le altura e velocidade vertical do defensor -- entao
+      // saltar cedo ou tarde erra, como tem que ser.
+      if (cmd.blockRequested && a.grounded && a.action.kind === 'none') {
+        const vertical = this.t.finishing.verticalAt25
+          + attr01(a.effective.vertical) * (this.t.finishing.verticalAt99 - this.t.finishing.verticalAt25);
+        jump(a, vertical, this.t);
+        startAction(a, 'block_attempt', 0.55, 0.2, {}, true);
+      }
+    }
+  }
+
+  /**
+   * Para quem vai o passe do humano.
+   *
+   * Com `passTargetSlot` (passe por icone, tecla 1-5 ou clique no companheiro),
+   * vai para aquele atleta. Sem slot, vai para quem estiver mais aberto na
+   * direcao que o stick aponta -- nao simplesmente o mais proximo, que
+   * devolveria a bola para tras o tempo todo.
+   */
+  private userPassTarget(a: Actor, slot?: number): Actor | undefined {
+    const mates = this.onCourtActors(a.team).filter((x) => x.id !== a.id);
+    if (mates.length === 0) return undefined;
+
+    if (slot !== undefined) {
+      const bySlot = mates.find((x) => x.slot === slot);
+      if (bySlot) return bySlot;
+    }
+
+    const aim = this.userCommand.move;
+    const defenders = this.onCourtActors((1 - a.team) as 0 | 1);
+    const aimLen = len2(aim);
+
+    let best: Actor | undefined;
+    let bestScore = -Infinity;
+    for (const m of mates) {
+      const to = sub2(m.pos, a.pos);
+      const d = len2(to);
+      if (d < 0.6) continue;
+      const dir = norm2(to);
+      // Alinhamento com a direcao apontada.
+      const aligned = aimLen > 0.2 ? dot2(dir, norm2(aim)) : 0;
+      // Quao livre o companheiro esta.
+      const nearest = defenders.reduce((acc, dd) => Math.min(acc, dist2(dd.pos, m.pos)), 99);
+      const open = clamp01(nearest / 3.5);
+      const score = aligned * 2.2 + open * 1.1 - d * 0.045;
+      if (score > bestScore) {
+        bestScore = score;
+        best = m;
+      }
+    }
+    return best ?? mates[0];
+  }
+
+  /**
+   * Quem o humano esta controlando AGORA.
+   *
+   * Sem player lock o controle segue a bola, e a flag `userControlled` so era
+   * escrita uma vez, no construtor, para o caso travado. Resultado: em modo
+   * normal nenhum ator ficava marcado, a IA nao pulava ninguem e jogava por
+   * cima do humano -- os dois mandando no mesmo corpo, com a IA quase sempre
+   * ganhando. Era esse o motivo real de o controle "nao responder".
+   *
+   * Por isso a marca e reescrita a cada tique de decisao, antes de a IA rodar.
+   */
+  private refreshUserControl(): void {
+    if (this.config.userTeam === undefined) return;
+    const user = this.userActor();
+    for (const a of this.actors) {
+      a.userControlled = a === user;
     }
   }
 
@@ -780,7 +941,9 @@ export class GameSim {
       move: cmd.move,
       sprint: cmd.sprint && a.adrenaline > 0.02,
       facing: cmd.shootHeld ? toAngle(sub2(hoop, a.pos)) : facing,
-      stance: a.hasBall ? 'dribble' : (a.team !== this.possession.team ? 'defense' : 'normal'),
+      stance: cmd.postUp && a.hasBall
+        ? 'post'
+        : a.hasBall ? 'dribble' : (a.team !== this.possession.team ? 'defense' : 'normal'),
       brake: len2(cmd.move) < 0.08,
     };
   }
