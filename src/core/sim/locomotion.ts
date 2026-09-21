@@ -182,8 +182,13 @@ export function stepLocomotion(a: Actor, intent: LocomotionIntent, dt: number, t
   stepFeet(a, dt, t);
 
   // --- 8. Equilibrio ----------------------------------------------------------
+  // O equilibrio e ameacado por duas coisas: torcer o corpo para o lado
+  // (componente perpendicular a velocidade) e pedir quase todo o atrito
+  // disponivel de uma vez (frear ou arrancar no limite).
   const lateralAccel = lateralComponent(a.vel, delta, applied);
-  const sharpness = clamp01(lateralAccel / Math.max(1, maxTraction));
+  const lateralSharpness = clamp01(lateralAccel / Math.max(1, maxTraction));
+  const tractionSharpness = clamp01((applied / Math.max(1, maxTraction) - 0.55) / 0.45);
+  const sharpness = clamp01(Math.max(lateralSharpness, tractionSharpness * 0.75));
   const loss = sharpness * L.balanceLossScale * dt * 60 * lerp(1.15, 0.7, clamp01(a.effective.agility / 99));
   const contactBalanceBadge = bv(a, 'phys.contactBalance');
   const realLoss = loss * (1 - clamp01(contactBalanceBadge) * 0.35);

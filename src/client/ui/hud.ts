@@ -224,7 +224,7 @@ export function drawMatchupInfo(ctx: Ctx, sim: GameSim, w: number): void {
   ctx.textAlign = 'right';
   ctx.font = '11px system-ui, sans-serif';
   ctx.fillStyle = 'rgba(205,220,245,0.75)';
-  const gp = sim.teams[(1 - handler.team) as 0 | 1].gameplan;
+  const gp = sim.gameplanOf((1 - handler.team) as 0 | 1);
   ctx.fillText(`cobertura: ${gp.pnrCoverage} · ajuda: ${(gp.helpAggression * 100).toFixed(0)}%`, w - 18, 86);
   if (def) ctx.fillText(`${handler.profile.lastName} x ${def.profile.lastName}`, w - 18, 102);
   ctx.restore();

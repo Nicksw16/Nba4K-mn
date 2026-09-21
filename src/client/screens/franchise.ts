@@ -304,7 +304,7 @@ function finishSeason(ctx: AppContext): void {
 
   const order = draftOrder(ctx.league, s.season.standings, s.rng);
   const prospects = generateDraftClass(s.rng, s.season.season);
-  const picks = runDraft(ctx.league, order, prospects, 2);
+  const picks = runDraft(ctx.league, order, prospects, 2, s.rng);
   const myPick = picks.find((p) => p.teamId === s.userTeamId);
   if (myPick) s.log.unshift(`Draft: sua equipe escolheu na posicao ${myPick.pick}.`);
 

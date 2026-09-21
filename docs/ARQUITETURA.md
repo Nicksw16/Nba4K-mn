@@ -1,0 +1,102 @@
+# Arquitetura
+
+## Princípio central
+
+```
+src/core/  →  nunca importa de src/client/, nunca toca DOM
+src/client/ →  importa de core livremente
+src/cli/    →  importa de core livremente
+```
+
+Essa regra única é o que permite:
+
+- rodar a **mesma** simulação no navegador e em um processo Node;
+- calibrar com milhares de posses em segundos, sem render;
+- manter testes de integração que jogam partidas inteiras em `node:test`;
+- simular uma temporada de 82 jogos em ~180 ms.
+
+## Dois relógios
+
+| Relógio | Frequência | O que roda |
+|---|---|---|
+| Físico | 120 Hz (passo fixo) | Locomoção, contato, bola, progresso de ação, fadiga |
+| Decisão | 12 Hz | Percepção de quadra, decisão da IA, atributos efetivos |
+
+O corpo é contínuo; a cabeça decide em intervalos. É o que produz o atraso de
+reação natural do defensor sem precisar de um `reactionDelay` artificial.
+
+O tique de decisão também é onde os atributos efetivos são recalculados
+(fadiga, adrenalina, takeover, badges) — fazer isso a 120 Hz custava mais que a
+física inteira.
+
+## Integração simultânea
+
+```
+1. calcular TODAS as intenções sobre o mesmo instante
+2. aplicar contenção defensiva sobre as posições do início do passo
+3. mover todos os corpos
+4. resolver contatos
+5. mover a bola
+6. progredir ações
+```
+
+Integrar ator por ator na ordem da lista dava vantagem sistemática ao time que
+vinha depois. O teste de espelho encontrou isso.
+
+## Fluxo de uma posse
+
+```
+beginPossession
+   ├─ assignMatchups (quem marca quem)
+   ├─ callPlay (treinador escolhe o set)
+   └─ assignRoles (quem é handler, big, shooter…)
+
+a cada tique de decisão:
+   buildCourtView  →  espaçamento, linhas, gravidade, mismatch
+   decideOnBall    →  valor esperado: arremessar | penetrar | passar | criar | postar
+   decideOffBall   →  papel na jogada, com abandono por leitura melhor
+   decideDefense   →  marcação, cobertura de PnR, ajuda, boxout
+
+a cada passo físico:
+   stepLocomotion  →  momentum, atrito, equilíbrio, pés
+   applyCutoff     →  contenção física do defensor
+   resolveContacts →  impulso, classificação, julgamento de falta
+   stepBall        →  gravidade, arrasto, Magnus, aro, tabela
+   progressActions →  release de arremesso, passe, finalização
+```
+
+## Fluxo de um evento
+
+Um único `EventLog` alimenta tudo:
+
+```
+GameSim → EventLog ─┬→ BoxScore (estatística)
+                    ├→ HUD (ticker, flashes)
+                    ├→ AudioEngine (rede, apito, torcida)
+                    ├→ Camera (shake em lances de impacto)
+                    └→ highlights() (seleção por drama, base do replay)
+```
+
+Isso evita o problema clássico de ter três fontes de verdade sobre o que
+aconteceu na jogada.
+
+## Onde o estado vive
+
+| Estado | Onde | Escopo |
+|---|---|---|
+| Perfil do atleta | `PlayerProfile` | entre partidas |
+| Corpo em quadra | `Actor` | uma partida |
+| Gameplan da partida | `GameSim.gameplans` | uma partida (cópia) |
+| Vitórias e derrotas | `Team` / `SeasonState` | temporada |
+| Progressão | `ProgressionState` | carreira |
+
+A cópia do gameplan é deliberada: o treinador ajusta o plano durante o jogo, e
+se ele escrevesse no objeto da liga, a próxima partida começaria contaminada —
+e duas simulações com a mesma seed dariam resultados diferentes. Há teste para
+isso.
+
+## Determinismo
+
+Toda aleatoriedade passa por `Rng` semeado. Dada a mesma seed e o mesmo estado
+inicial, a partida se repete exatamente — incluindo a contagem de eventos.
+Isso é o que torna possível investigar um bug de simulação.

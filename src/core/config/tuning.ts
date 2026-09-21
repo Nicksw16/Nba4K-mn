@@ -370,7 +370,7 @@ export const DEFAULT_TUNING: Tuning = {
     missSpreadMax: 0.1,
     arcNear: 52,
     arcFar: 46,
-    freeThrowBase: 0.92,
+    freeThrowBase: 0.84,
   },
   finishing: {
     layupBase: 0.84,
@@ -419,7 +419,7 @@ export const DEFAULT_TUNING: Tuning = {
     contestHandWeight: 0.22,
     contestHeightWeight: 0.16,
     contestTimingWeight: 0.12,
-    stealBase: 0.028,
+    stealBase: 0.018,
     stealFoulBase: 0.1,
     blockBase: 0.105,
     blockFoulBase: 0.07,

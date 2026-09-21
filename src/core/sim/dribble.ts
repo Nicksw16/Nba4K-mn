@@ -308,7 +308,7 @@ export function ballSecurityRisk(a: Actor, ctx: BallSecurityContext, t: Tuning):
     * (1 - a.balance * 0.35);
 
   const control = clamp01(handle * 0.5 + hands * 0.22 + strength * 0.13 + clamp01(security) * 0.3 + a.stamina * 0.1);
-  return clamp01(base * (1.45 - control));
+  return clamp01(base * (1.2 - control * 0.55));
 }
 
 /** Rola o risco de fumble. Retorna true se a bola escapou. */

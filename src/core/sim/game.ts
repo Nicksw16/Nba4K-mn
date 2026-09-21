@@ -17,7 +17,7 @@ import { Rng } from '../math/rng.js';
 import { Tuning } from '../config/tuning.js';
 import { AiProfile, AssistProfile, Sliders, aiProfile, applySliders, assistProfile, shotSuccessMultiplier } from '../config/sliders.js';
 import { COURT, Side, clampToCourt, distToHoop, freeThrowSpot, hoopGround, hoopPos, isInPaint, isOutOfBounds, shotValue, shotZone } from '../config/court.js';
-import { Team, findPlayer, startersOf } from '../model/team.js';
+import { Gameplan, Team, findPlayer, startersOf } from '../model/team.js';
 import { PlayerProfile, fullName, shortName } from '../model/player.js';
 import { Actor, addCue, badges, clearAction, createActor, decayMoves, startAction } from './actor.js';
 import { refreshEffective } from './effective.js';
@@ -133,6 +133,13 @@ export class GameSim {
   private views: [CourtView | null, CourtView | null] = [null, null];
   private decisions = new Map<string, OffensiveDecision | DefensiveDecision>();
   private rotationStates: [RotationState, RotationState];
+  /**
+   * Copia do gameplan de cada equipe para esta partida. O tecnico ajusta o
+   * plano durante o jogo; se ele escrevesse direto no objeto da liga, a
+   * proxima partida comecaria com o estado da anterior - e duas simulacoes
+   * com a mesma seed dariam resultados diferentes.
+   */
+  private gameplans: [Gameplan, Gameplan];
   private lastScore: [number, number] = [0, 0];
   private runTracker: { team: 0 | 1; points: number } = { team: 0, points: 0 };
   private periodPoints: [number, number] = [0, 0];
@@ -167,6 +174,10 @@ export class GameSim {
       shotChart: [],
     };
 
+    this.gameplans = [
+      JSON.parse(JSON.stringify(config.home.gameplan)) as Gameplan,
+      JSON.parse(JSON.stringify(config.away.gameplan)) as Gameplan,
+    ];
     this.aiProfileCfg = aiProfile(config.sliders);
     this.assist = assistProfile(config.sliders);
 
@@ -243,6 +254,11 @@ export class GameSim {
 
   ballHandler(): Actor | undefined {
     return this.ball.ownerId ? this.actorById(this.ball.ownerId) : undefined;
+  }
+
+  /** Gameplan efetivo desta partida (inclui ajustes do tecnico). */
+  gameplanOf(teamIdx: 0 | 1): Gameplan {
+    return this.gameplans[teamIdx];
   }
 
   score(teamIdx: 0 | 1): number {
@@ -355,14 +371,18 @@ export class GameSim {
       this.lastContactByActor.set(a.id, Math.max(0, contact - dt * 3));
       if (a.onCourt) {
         const ps = this.box.players.get(a.id);
-        if (ps) {
+        // Minutos so correm com o relogio: bola morta e intervalo nao contam,
+        // senao a sumula mostra 59 minutos em um jogo de 48.
+        if (ps && this.phase === 'live') {
           ps.secondsPlayed += dt;
           const sp = len2(a.vel);
           ps.distanceRun += sp * dt;
           ps.maxSpeed = Math.max(ps.maxSpeed, sp);
         }
-        const rot = this.rotationStates[a.team];
-        rot.minutes.set(a.id, (rot.minutes.get(a.id) ?? 0) + dt);
+        if (this.phase === 'live') {
+          const rot = this.rotationStates[a.team];
+          rot.minutes.set(a.id, (rot.minutes.get(a.id) ?? 0) + dt);
+        }
       }
     }
 
@@ -413,7 +433,7 @@ export class GameSim {
 
     // Marcacoes (recalculadas quando alguem esta sem marcador).
     if (defense.some((d) => !d.assignmentId || !offense.find((o) => o.id === d.assignmentId))) {
-      assignMatchups(defense, offense, this.teams[def].gameplan);
+      assignMatchups(defense, offense, this.gameplans[def]);
     }
 
     const view = buildCourtView(offense, defense, handler, this.attackingSide(off), this.t);
@@ -434,6 +454,7 @@ export class GameSim {
     }
 
     const possessionAge = this.simTime - this.possession.startedAt;
+    const teamFga = this.box.teams[off].fga;
     const playPhase = this.possession.play
       ? clamp01((this.simTime - this.possession.playStartedAt) / this.possession.play.duration)
       : 0;
@@ -489,7 +510,7 @@ export class GameSim {
       const role = Math.max(0, this.possession.roleOrder.indexOf(a.id));
       const ctx: OffenseContext = {
         view,
-        gameplan: this.teams[off].gameplan,
+        gameplan: this.gameplans[off],
         t: this.t,
         profile: this.aiProfileCfg,
         rng: this.rng,
@@ -503,6 +524,7 @@ export class GameSim {
         timeWithBall: a.ballTime,
         transition: this.possession.isFastBreak,
         possessionAge,
+        usageShare: teamFga > 0 ? (this.box.players.get(a.id)?.fga ?? 0) / teamFga : 0.2,
       };
       const decision = this.possession.isFastBreak && !a.hasBall && this.simTime - this.possession.startedAt < 2.5
         ? transitionAssignment(a, ctx, role)
@@ -514,7 +536,7 @@ export class GameSim {
     // Defensivos.
     for (const d of defense) {
       if (d.userControlled || loose) continue;
-      const decision = decideDefense(d, view, this.teams[def].gameplan, this.t, this.aiProfileCfg, {
+      const decision = decideDefense(d, view, this.gameplans[def], this.t, this.aiProfileCfg, {
         shotInFlight: !!this.ball.shotContext && !this.ball.shotContext.resolved,
         loosePos: !this.ball.ownerId && this.phase === 'live' && !this.ball.shotContext ? ballGround(this.ball) : undefined,
         timeLeft: this.clock,
@@ -596,12 +618,13 @@ export class GameSim {
     for (const teamIdx of [0, 1] as (0 | 1)[]) {
       const team = this.teams[teamIdx];
       const snapshot = this.snapshot(teamIdx);
+      const planned: Team = { ...team, gameplan: this.gameplans[teamIdx] };
       const decision = fullCoachDecision(
-        team, this.onCourtActors(teamIdx), this.benchActors(teamIdx),
+        planned, this.onCourtActors(teamIdx), this.benchActors(teamIdx),
         this.rotationStates[teamIdx], snapshot, this.aiProfileCfg, this.t,
       );
       if (Object.keys(decision.gameplanChanges).length) {
-        Object.assign(team.gameplan, decision.gameplanChanges);
+        Object.assign(this.gameplans[teamIdx], decision.gameplanChanges);
         for (const note of decision.notes) {
           this.events.push({ kind: 'gameplan_change', period: this.period, clock: this.clock, team: teamIdx, text: note });
         }
@@ -611,8 +634,8 @@ export class GameSim {
         this.rotationStates[teamIdx].lastSubClock = this.clock;
       }
       // Matchup hunting.
-      if (!team.gameplan.huntTargetId || this.rng.chance(0.15)) {
-        team.gameplan.huntTargetId = pickHuntTarget(this.onCourtActors((1 - teamIdx) as 0 | 1));
+      if (!this.gameplans[teamIdx].huntTargetId || this.rng.chance(0.15)) {
+        this.gameplans[teamIdx].huntTargetId = pickHuntTarget(this.onCourtActors((1 - teamIdx) as 0 | 1));
       }
     }
   }
@@ -676,7 +699,7 @@ export class GameSim {
       const exposure = handler.action.kind === 'dribble_move'
         ? (MOVE_BY_ID.get(String(handler.action.data.moveId))?.exposure ?? 0.3)
         : 0.22;
-      const stance = chooseStance(d, handler, view.attackingSide, this.t, this.teams[d.team].gameplan.foulTolerance);
+      const stance = chooseStance(d, handler, view.attackingSide, this.t, this.gameplans[d.team].foulTolerance);
       const result = attemptSteal(d, handler, exposure, this.t, this.rng, stance.posture);
       startAction(d, 'steal_attempt', 0.35, 0.05, {}, true);
       if (result.success) this.resolveSteal(d, handler);
@@ -1386,9 +1409,9 @@ export class GameSim {
         // Tres desfechos, nesta ordem: nao encostar (o mais comum), encostar e
         // desviar, ou encostar e dominar. Tratar "estar perto" como roubo dava
         // dezenas de turnovers por jogo.
-        const touch = clamp01(0.18 + skill * 0.4) * (0.55 + reach * 0.75);
+        const touch = clamp01(0.2 + skill * 0.22) * (0.6 + reach * 0.6);
         if (!this.rng.chance(touch)) continue;
-        if (this.rng.chance(clamp01(0.2 + skill * 0.35))) {
+        if (this.rng.chance(clamp01(0.24 + skill * 0.18))) {
           const passer = this.actorById(this.ball.lastTouchId ?? '');
           this.resolveInterception(d, passer);
           return;
@@ -1555,7 +1578,7 @@ export class GameSim {
       const victim = c.aggressorIsA ? c.b : c.a;
       const foul = judgeContact(c, this.t, this.rng, {
         shooting: shooterInvolved && victim.hasBall,
-        foulTolerance: this.teams[aggressor.team].gameplan.foulTolerance,
+        foulTolerance: this.gameplans[aggressor.team].foulTolerance,
       });
       if (foul) {
         const by = this.actorById(foul.byId);
@@ -1748,7 +1771,7 @@ export class GameSim {
     };
     const offense = this.onCourtActors(team);
     const defense = this.onCourtActors((1 - team) as 0 | 1);
-    assignMatchups(defense, offense, this.teams[(1 - team) as 0 | 1].gameplan);
+    assignMatchups(defense, offense, this.gameplans[(1 - team) as 0 | 1]);
     if (previous && previous.team !== team) {
       for (const d of defense) applyTakeoverEvent(d, 'stop', this.t);
     }

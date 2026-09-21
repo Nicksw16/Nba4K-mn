@@ -71,50 +71,39 @@ export interface SeasonAwards {
   allNba: string[];
 }
 
-/** Calendario equilibrado: cada time joga contra todos, ida e volta, ate a cota. */
+/**
+ * Calendario equilibrado pelo metodo do circulo (round-robin).
+ *
+ * Cada rodada e um dia e cada equipe joga exatamente uma vez por rodada,
+ * entao `gamesPerTeam` rodadas dao exatamente esse numero de jogos para todos.
+ * O mando alterna a cada volta completa.
+ */
 export function buildSchedule(league: League, rules: LeagueRules, rng: Rng): ScheduledGame[] {
-  const teams = league.teams;
-  const pairs: [string, string][] = [];
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = 0; j < teams.length; j++) {
-      if (i === j) continue;
-      pairs.push([teams[i].identity.id, teams[j].identity.id]);
-    }
-  }
-  const perTeam = rules.gamesPerTeam;
-  const needed = Math.round((teams.length * perTeam) / 2);
-  const games: ScheduledGame[] = [];
-  const counts = new Map<string, number>();
-  for (const t of teams) counts.set(t.identity.id, 0);
+  const ids = league.teams.map((t) => t.identity.id);
+  if (ids.length % 2 === 1) ids.push('__bye__');
+  const n = ids.length;
+  const rotation = rng.shuffle([...ids]);
+  const fixed = rotation[0];
+  let others = rotation.slice(1);
 
-  rng.shuffle(pairs);
+  const games: ScheduledGame[] = [];
   let id = 0;
-  for (const [home, away] of pairs) {
-    if (games.length >= needed) break;
-    if ((counts.get(home) ?? 0) >= perTeam || (counts.get(away) ?? 0) >= perTeam) continue;
-    games.push({ id: id++, day: 0, homeId: home, awayId: away, played: false });
-    counts.set(home, (counts.get(home) ?? 0) + 1);
-    counts.set(away, (counts.get(away) ?? 0) + 1);
-  }
-  // Distribui em dias: cada dia recebe no maximo metade dos times.
-  const perDay = Math.max(1, Math.floor(teams.length / 2));
-  rng.shuffle(games);
-  const dayBusy = new Map<number, Set<string>>();
-  for (const g of games) {
-    let day = 0;
-    for (;;) {
-      const busy = dayBusy.get(day) ?? new Set<string>();
-      if (!busy.has(g.homeId) && !busy.has(g.awayId) && busy.size < perDay * 2) {
-        busy.add(g.homeId);
-        busy.add(g.awayId);
-        dayBusy.set(day, busy);
-        g.day = day;
-        break;
-      }
-      day++;
+  for (let round = 0; round < rules.gamesPerTeam; round++) {
+    const lap = Math.floor(round / (n - 1));
+    const pairs: [string, string][] = [[fixed, others[others.length - 1]]];
+    for (let i = 0; i < (n - 2) / 2; i++) {
+      pairs.push([others[i], others[others.length - 2 - i]]);
     }
+    for (const [a, b] of pairs) {
+      if (a === '__bye__' || b === '__bye__') continue;
+      // Inverte o mando a cada volta para equilibrar casa e fora.
+      const home = (round + lap) % 2 === 0 ? a : b;
+      const away = home === a ? b : a;
+      games.push({ id: id++, day: round, homeId: home, awayId: away, played: false });
+    }
+    others = [others[others.length - 1], ...others.slice(0, others.length - 1)];
   }
-  return games.sort((a, b) => a.day - b.day);
+  return games;
 }
 
 export function createSeason(league: League, rules: LeagueRules, rng: Rng): SeasonState {

@@ -11,7 +11,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
-await page.goto('http://127.0.0.1:8080/', { waitUntil: 'networkidle' });
+await page.goto('http://127.0.0.1:8081/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(1200);
 const title = await page.textContent('.brand h1');
 console.log('titulo:', title);

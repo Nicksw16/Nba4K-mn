@@ -174,7 +174,7 @@ export function planSubstitutions(
   const subs: { out: string; in: string }[] = [];
   if (bench.length === 0) return subs;
   // Nao troca em qualquer momento: respeita um intervalo minimo.
-  if (snapshot.clock > 0 && Math.abs(state.lastSubClock - snapshot.clock) < 150) return subs;
+  if (snapshot.clock > 0 && Math.abs(state.lastSubClock - snapshot.clock) < 110) return subs;
 
   const discipline = coach.rotationDiscipline / 100;
   const candidatesOut = onCourt
@@ -184,10 +184,12 @@ export function planSubstitutions(
       const minutes = state.minutes.get(a.id) ?? 0;
       const target = state.targets.get(a.id) ?? 20;
       const overplayed = clamp01((minutes / 60 - target) / 8);
-      const urgency = gassed * 0.6 + (foulTrouble ? 0.55 : 0) + overplayed * discipline * 0.5;
+      // Minutos acima do alvo pesam tanto quanto cansaco: sem isso o titular
+      // joga os 48 minutos inteiros, o que nao acontece em jogo nenhum.
+      const urgency = gassed * 0.55 + (foulTrouble ? 0.55 : 0) + overplayed * (0.4 + discipline * 0.8) * 1.4;
       return { actor: a, urgency, foulTrouble };
     })
-    .filter((c) => c.urgency > 0.62)
+    .filter((c) => c.urgency > 0.5)
     .sort((x, y) => y.urgency - x.urgency);
 
   const candidatesIn = bench

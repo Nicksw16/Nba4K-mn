@@ -183,6 +183,7 @@ export function runDraft(
   order: string[],
   prospects: DraftProspect[],
   rounds = 2,
+  rng?: Rng,
 ): { pick: number; teamId: string; playerId: string }[] {
   const byId = new Map(league.teams.map((t) => [t.identity.id, t]));
   const available = [...prospects];
@@ -196,7 +197,8 @@ export function runDraft(
       // Necessidade: posicao mais fraca do elenco.
       const need = weakestPosition(team);
       const idx = available.findIndex((p) => p.player.position === need);
-      const chosen = idx >= 0 && Math.random() < 0.55 ? available.splice(idx, 1)[0] : available.shift()!;
+      const takeNeed = idx >= 0 && (rng ? rng.chance(0.55) : true);
+      const chosen = takeNeed ? available.splice(idx, 1)[0] : available.shift()!;
       chosen.player.teamId = teamId;
       chosen.player.contract = {
         salary: Math.max(1.1, 9.5 - pick * 0.22),

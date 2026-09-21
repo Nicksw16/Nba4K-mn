@@ -110,13 +110,16 @@ export function attemptSteal(
   const pickpocket = bv(defender, 'def.pickpocket');
   const proximity = clamp01(1 - (dist - 0.5) / 1.7);
 
+  // A faixa entre o melhor e o pior defensor precisa ser estreita: no basquete
+  // real o time que mais rouba faz ~9 e o que menos faz ~6. Multiplicadores
+  // largos aqui transformavam qualquer diferenca de elenco em massacre.
   const chance = clamp01(
     t.defense.stealBase
-    * (0.4 + skill * 1.3 + iq * 0.3)
-    * (1 + pickpocket)
+    * (0.75 + skill * 0.55 + iq * 0.2)
+    * (1 + pickpocket * 0.6)
     * proximity
-    * (0.45 + ballExposure * 1.5)
-    * (1.5 - handle - clamp01(security) * 0.4)
+    * (0.6 + ballExposure * 0.9)
+    * (1.2 - handle * 0.45 - clamp01(security) * 0.2)
     * postureModifiers(posture, t).contestMult,
   );
 

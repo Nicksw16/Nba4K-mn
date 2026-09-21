@@ -286,7 +286,10 @@ export function shotProbability(
   const distancePenalty = beyond * S.distanceFalloff;
 
   // Habilidade bruta ancora a taxa: 25 -> muito baixo, 99 -> elite.
-  const skillFloor = lerp(0.2, 0.62, attr);
+  // Piso por habilidade comprimido: entre o pior e o melhor arremessador da
+  // liga a diferenca real de aproveitamento e de ~12 pontos percentuais, nao
+  // de 40. Sem essa compressao, elencos diferentes produziam massacres.
+  const skillFloor = lerp(0.33, 0.56, attr);
   base = lerp(skillFloor, base, 0.72) - distancePenalty;
 
   const contestPenalty = contest.total * S.contestImpact * (1 - clamp01(bv(a, 'shot.contested')) * 0.55);

@@ -186,7 +186,10 @@ export function generateTeam(rng: Rng, opts: GenerateTeamOptions): Team {
   };
 
   // Curva do elenco: 1 estrela, 2 titulares bons, resto decai.
-  const baseLevel = 58 + opts.strength * 18;
+  // A faixa entre a melhor e a pior equipe precisa ser estreita: numa liga
+  // real a media de titulares varia ~7 pontos de overall, nao 18. Faixa larga
+  // demais produzia massacres de 40 pontos como resultado tipico.
+  const baseLevel = 62 + opts.strength * 10;
   const curve = [18, 10, 5, 1, -2, -4, -6, -8, -11, -13, -16, -19, -22, -25, -28];
   const needed: Position[] = ['PG', 'SG', 'SF', 'PF', 'C', 'PG', 'SG', 'SF', 'PF', 'C', 'SG', 'SF', 'PF', 'C', 'PG'];
   const roster: PlayerProfile[] = [];

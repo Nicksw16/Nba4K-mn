@@ -117,34 +117,40 @@ export function quickSimGame(home: Team, away: Team, rng: Rng, homeCourt = 2.4):
     ts.possessions = possessions;
 
     const teamPoints = Math.round((rating * possessions) / 100);
-    // Reparte tentativas conforme uso e minutos.
-    let remainingPoints = teamPoints;
 
-    for (const u of list) {
-      if (u.minutes < 0.5) continue;
+    // Primeiro reparte as TENTATIVAS por uso; depois calibra as PORCENTAGENS
+    // para bater com o alvo de pontos. Ajustar pontos no fim (somando e
+    // subtraindo cestas) distorcia o aproveitamento para baixo.
+    const shares = list.filter((u) => u.minutes >= 0.5);
+    const plan = shares.map((u) => {
+      const fga = Math.max(0, Math.round(possessions * 0.86 * u.usage + rng.normal(0, 1.6)));
+      const tpa = Math.min(fga, Math.round(fga * u.threeRate * lerp(0.75, 1.1, rng.next())));
+      const fgBase = u.efficiency + advantage / 140;
+      const tpPct = clamp01(fgBase - 0.09 + (u.player.attributes.threePoint - 70) / 340 + rng.normal(0, 0.05));
+      const twoPct = clamp01(fgBase + 0.06 + (u.player.attributes.closeShot - 70) / 320 + rng.normal(0, 0.045));
+      const drawRate = 0.085 + (u.player.attributes.drawFoul / 99) * 0.13;
+      const fta = Math.max(0, Math.round(fga * drawRate * 2 + rng.normal(0, 1)));
+      const ftPct = clamp01(u.player.attributes.freeThrow / 105 + rng.normal(0, 0.05));
+      return { u, fga, tpa, twoA: fga - tpa, tpPct, twoPct, fta, ftPct };
+    });
+
+    const expectedPoints = plan.reduce((sum, p) => sum + p.tpa * p.tpPct * 3 + p.twoA * p.twoPct * 2 + p.fta * p.ftPct, 0);
+    const k = expectedPoints > 1 ? clamp(teamPoints / expectedPoints, 0.72, 1.32) : 1;
+
+    for (const entry of plan) {
+      const { u } = entry;
       const ps = emptyPlayerStats(u.player.id, fullName(u.player), teamIdx);
       ps.secondsPlayed = u.minutes * 60;
 
-      const share = u.usage;
-      const fga = Math.max(0, Math.round(possessions * 0.86 * share + rng.normal(0, 1.6)));
-      const tpa = Math.round(fga * u.threeRate * lerp(0.75, 1.1, rng.next()));
-      const twoA = Math.max(0, fga - tpa);
+      const tpm = binomial(entry.tpa, clamp01(entry.tpPct * k), rng);
+      const twoM = binomial(entry.twoA, clamp01(entry.twoPct * k), rng);
+      const ftm = binomial(entry.fta, clamp01(entry.ftPct * (0.92 + k * 0.08)), rng);
 
-      const fgBase = u.efficiency + (advantage / 140);
-      const tpPct = clamp01(fgBase - 0.07 + (u.player.attributes.threePoint - 70) / 340 + rng.normal(0, 0.055));
-      const twoPct = clamp01(fgBase + 0.11 + (u.player.attributes.closeShot - 70) / 320 + rng.normal(0, 0.05));
-      const tpm = binomial(tpa, tpPct, rng);
-      const twoM = binomial(twoA, twoPct, rng);
-
-      const drawRate = 0.085 + (u.player.attributes.drawFoul / 99) * 0.13;
-      const fta = Math.max(0, Math.round(fga * drawRate * 2 + rng.normal(0, 1)));
-      const ftm = binomial(fta, clamp01(u.player.attributes.freeThrow / 105 + rng.normal(0, 0.05)), rng);
-
-      ps.fga = fga;
-      ps.tpa = tpa;
+      ps.fga = entry.fga;
+      ps.tpa = entry.tpa;
       ps.tpm = tpm;
       ps.fgm = tpm + twoM;
-      ps.fta = fta;
+      ps.fta = entry.fta;
       ps.ftm = ftm;
       ps.points = ps.fgm * 2 + ps.tpm + ps.ftm;
 
@@ -164,29 +170,8 @@ export function quickSimGame(home: Team, away: Team, rng: Rng, homeCourt = 2.4):
       ts.assists += ps.assists; ts.turnovers += ps.turnovers; ts.steals += ps.steals;
       ts.blocks += ps.blocks; ts.fouls += ps.fouls;
       ts.points += ps.points;
-      remainingPoints -= ps.points;
     }
 
-    // Ajuste fino para casar com o rating alvo sem distorcer ninguem.
-    if (Math.abs(remainingPoints) > 2) {
-      const top = [...box.players.values()].filter((p) => p.teamIdx === teamIdx).sort((a, b) => b.points - a.points);
-      let i = 0;
-      while (Math.abs(remainingPoints) > 1 && top.length) {
-        const p = top[i % top.length];
-        const delta = remainingPoints > 0 ? 2 : -2;
-        if (p.points + delta >= 0) {
-          p.points += delta;
-          p.fgm += delta > 0 ? 1 : -1;
-          p.fga += delta > 0 ? 1 : 0;
-          ts.points += delta;
-          ts.fgm += delta > 0 ? 1 : -1;
-          if (delta > 0) ts.fga += 1;
-          remainingPoints -= delta;
-        }
-        i++;
-        if (i > 200) break;
-      }
-    }
     ts.paintPoints = Math.round(ts.points * lerp(0.36, 0.52, clamp01((own.off - 70) / 30)));
   }
 

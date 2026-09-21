@@ -100,7 +100,7 @@ export function contestRebound(
     // Vantagem estrutural da defesa: ela comeca a jogada entre o adversario e
     // a cesta. Sem esse termo, a taxa de rebote ofensivo fica muito acima da
     // realidade (36% contra os ~26% de uma liga profissional).
-    const defensiveEdge = offensive ? 0 : 0.44;
+    const defensiveEdge = offensive ? 0 : 0.42;
 
     const score = clamp01(
       positionScore * R.positionWeight

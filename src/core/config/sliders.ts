@@ -94,7 +94,7 @@ export const ASSIST_PROFILES: Record<Difficulty, AssistProfile> = {
 
 /** Preset que empurra o jogo para posses longas e distribuicao de arremesso realista. */
 export const SIMULATION_PATCH: DeepPartial<Tuning> = {
-  ai: { shotQualityThreshold: 0.56, passWillingness: 0.66, clockPressureStart: 6 },
+  ai: { shotQualityThreshold: 0.57, passWillingness: 0.66, clockPressureStart: 6 },
   fatigue: { sprintDrain: 0.014, recoverOnCourt: 0.0068 },
   fouls: { contactBase: 0.115 },
 };

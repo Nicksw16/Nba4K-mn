@@ -61,6 +61,8 @@ export interface OffenseContext {
   transition: boolean;
   /** Tempo decorrido desde o inicio da posse (disciplina de relogio). */
   possessionAge: number;
+  /** Fracao das tentativas da equipe que ja sao deste atleta. */
+  usageShare: number;
 }
 
 /** Decisao do portador da bola. */
@@ -80,13 +82,21 @@ export function decideOnBall(a: Actor, ctx: OffenseContext): OffensiveDecision {
   // Excecao importante: bola recem-recebida com o homem livre e exatamente o
   // arremesso que o sistema QUER. Penalizar isso mataria o catch-and-shoot -
   // e, junto com ele, as assistencias.
-  const freshCatch = ctx.timeWithBall < 0.9
-    && (read?.nearestDefender ?? 0) > 2.8
-    && (read?.shotThreat ?? 0) > 0.45
-    && ctx.possessionAge > 2.5;
-  const earlyClock = ctx.possessionAge < 13 && !ctx.transition && !freshCatch;
-  const earlyPenalty = earlyClock ? 0.7 - ctx.possessionAge * 0.045 : 0;
-  const shootValue = sq * (desperation ? 1.9 : 1) + clutchUrgency - earlyPenalty
+  // A excecao de catch-and-shoot precisa ser estreita: com bom espacamento
+  // quase toda recepcao fica "aberta", e a posse inteira virava um passe e um
+  // arremesso de 3 segundos.
+  const freshCatch = ctx.timeWithBall < 0.8
+    && (read?.nearestDefender ?? 0) > 3.0
+    && (read?.shotThreat ?? 0) > 0.5
+    && ctx.possessionAge > 3.5;
+  const earlyClock = ctx.possessionAge < 14 && !ctx.transition && !freshCatch;
+  const earlyPenalty = earlyClock ? 0.78 - ctx.possessionAge * 0.045 : 0;
+  // Controle de uso: nem a estrela chuta metade da equipe. Acima da fatia que
+  // a tendencia pessoal justifica, o valor de arremessar cai e o de passar sobe.
+  const usageCap = 0.2 + (a.profile.tendencies.isolation + a.profile.tendencies.pullup) / 500;
+  const usagePenalty = clamp01((ctx.usageShare - usageCap) / 0.2) * 0.35;
+
+  const shootValue = sq * (desperation ? 1.9 : 1) + clutchUrgency - earlyPenalty - usagePenalty
     + (shotClock < t.ai.clockPressureStart ? (t.ai.clockPressureStart - shotClock) * 0.06 : 0);
 
   // --- Valor de penetrar ---
@@ -105,6 +115,7 @@ export function decideOnBall(a: Actor, ctx: OffenseContext): OffensiveDecision {
   const bestPass = candidates[0];
   const passValue = bestPass
     ? clamp01(bestPass.score) * (0.5 + (a.profile.tendencies.pass / 100) * 1.1) * t.ai.passWillingness * 2.1
+      * (1 + usagePenalty)
     : 0;
 
   // --- Valor de criar com drible ---
