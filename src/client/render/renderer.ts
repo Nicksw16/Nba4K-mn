@@ -13,6 +13,8 @@ import { Projection } from './camera.js';
 import { Actor } from '../../core/sim/actor.js';
 import { Ball } from '../../core/sim/ball.js';
 import { standingReach } from '../../core/model/attributes.js';
+import { BodyInfo, drawBody, drawBodyReflection, drawBodyShadow } from './body.js';
+import { ARENA_LIGHT, drawSphere, hexToRgb, lightScreenDir } from './shading.js';
 
 export interface TeamColors {
   primary: string;
@@ -243,191 +245,81 @@ export function drawHoops(ctx: Ctx, proj: Projection): void {
   }
 }
 
-export interface ActorRenderInfo {
-  actor: Actor;
-  colors: TeamColors;
-  isUser: boolean;
-  isBallHandler: boolean;
-  label: string;
-}
+/** O que o desenho precisa saber de cada atleta em quadra. */
+export type ActorRenderInfo = BodyInfo;
 
-/** Desenha sombra + corpo. A ordem de desenho e por profundidade (pintor). */
+/**
+ * Sombras de todos primeiro, depois os corpos por profundidade.
+ *
+ * A ordem importa por dois motivos: uma sombra nunca pode cair por cima de um
+ * corpo, e um atleta mais perto tem que cobrir um mais longe. O resto (qual
+ * osso na frente de qual) e resolvido dentro de drawBody.
+ */
 export function drawActors(
   ctx: Ctx,
   proj: Projection,
   infos: ActorRenderInfo[],
   options: RenderOptions,
+  ball: Vec3 | null,
+  time: number,
 ): void {
-  // Sombras primeiro (todas no chao).
-  for (const info of infos) {
-    const a = info.actor;
-    const s = proj.project(v3(a.pos.x, a.pos.y, 0.01));
-    if (!s) continue;
-    const spread = 1 + a.z * 0.35;
+  // Reflexo primeiro, recortado na quadra: e o que esta DENTRO do piso.
+  if (options.quality === 'high') {
     ctx.save();
-    ctx.globalAlpha = clamp01(0.42 - a.z * 0.12);
-    ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.ellipse(s.x, s.y, s.scale * 0.34 * spread, s.scale * 0.13 * spread, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (poly(ctx, proj, [v3(0, 0, 0), v3(COURT.length, 0, 0), v3(COURT.length, COURT.width, 0), v3(0, COURT.width, 0)])) {
+      ctx.clip();
+      for (const info of infos) {
+        drawBodyReflection(ctx, proj, info, info.isBallHandler ? ball : null, ARENA_LIGHT, time);
+      }
+    }
     ctx.restore();
   }
 
-  // Corpos, do mais distante para o mais proximo.
+  for (const info of infos) {
+    drawBodyShadow(ctx, proj, info.actor, info.isBallHandler ? ball : null, ARENA_LIGHT, time, options.quality);
+  }
+
   const sorted = infos
     .map((info) => ({ info, p: proj.project(v3(info.actor.pos.x, info.actor.pos.y, 1)) }))
     .filter((x) => x.p !== null)
     .sort((x, y) => (y.p!.depth - x.p!.depth));
 
-  for (const { info, p } of sorted) {
-    drawActor(ctx, proj, info, p!, options);
+  for (const { info } of sorted) {
+    drawBody(ctx, proj, info, info.isBallHandler ? ball : null, ARENA_LIGHT, time, {
+      names: options.showNames,
+      indicators: options.showIndicators,
+      immersion: options.immersion,
+      quality: options.quality,
+    });
+    if (options.showDebug) drawActorDebug(ctx, proj, info.actor);
   }
 }
 
-function drawActor(
-  ctx: Ctx,
-  proj: Projection,
-  info: ActorRenderInfo,
-  base: { x: number; y: number; scale: number; depth: number },
-  options: RenderOptions,
-): void {
-  const a = info.actor;
-  const h = a.profile.physique.height;
-  const feetZ = a.z;
-  const headZ = a.z + h;
-
-  const foot = proj.project(v3(a.pos.x, a.pos.y, feetZ));
-  const head = proj.project(v3(a.pos.x, a.pos.y, headZ));
-  if (!foot || !head) return;
-
-  const pixelHeight = Math.max(6, foot.y - head.y);
-  const bodyW = pixelHeight * 0.30 * (0.88 + a.profile.physique.shoulderWidth * 0.22);
-
-  // Inclinacao: o corpo se inclina na direcao da aceleracao/velocidade.
-  const speed = len2(a.vel);
-  const leanDir = speed > 0.4 ? norm2(a.vel) : v2();
-  const camRight = Math.sign(Math.cos(0)); // projecao ja resolve; usamos deslocamento em tela
-  const headShift = speed > 0.4 ? clamp(leanDir.x * speed * 0.035, -0.6, 0.6) * pixelHeight * 0.12 : 0;
-
+/** Vetores de estado por cima do corpo (secao 138). */
+function drawActorDebug(ctx: Ctx, proj: Projection, a: Actor): void {
+  const foot = proj.project(v3(a.pos.x, a.pos.y, 0.05));
+  if (!foot) return;
   ctx.save();
-
-  // Pernas: desenhadas a partir das POSICOES REAIS DOS PES (foot planting).
-  const lf = proj.project(v3(a.feet.left.x, a.feet.left.y, feetZ));
-  const rf = proj.project(v3(a.feet.right.x, a.feet.right.y, feetZ));
-  const hipY = foot.y - pixelHeight * 0.48;
-  ctx.strokeStyle = shade(info.colors.primary, -0.35);
-  ctx.lineWidth = Math.max(2, pixelHeight * 0.09);
-  ctx.lineCap = 'round';
-  if (lf) {
+  ctx.lineWidth = 1.4;
+  const dir = fromAngle(a.heading, 1.2);
+  const tip = proj.project(v3(a.pos.x + dir.x, a.pos.y + dir.y, 0.05));
+  if (tip) {
+    ctx.strokeStyle = 'rgba(120,220,255,0.85)';
     ctx.beginPath();
-    ctx.moveTo(foot.x - bodyW * 0.18, hipY);
-    ctx.lineTo(lf.x, lf.y);
+    ctx.moveTo(foot.x, foot.y);
+    ctx.lineTo(tip.x, tip.y);
     ctx.stroke();
   }
-  if (rf) {
+  // Deslocamento de peso: a causa do ankle breaker, visivel.
+  const ws = proj.project(v3(a.pos.x + a.weightShift.x * 2.4, a.pos.y + a.weightShift.y * 2.4, 0.05));
+  if (ws) {
+    ctx.strokeStyle = 'rgba(255,140,80,0.9)';
     ctx.beginPath();
-    ctx.moveTo(foot.x + bodyW * 0.18, hipY);
-    ctx.lineTo(rf.x, rf.y);
+    ctx.moveTo(foot.x, foot.y);
+    ctx.lineTo(ws.x, ws.y);
     ctx.stroke();
   }
-
-  // Tronco
-  const torsoTop = foot.y - pixelHeight * 0.82;
-  const grad = ctx.createLinearGradient(foot.x - bodyW / 2, torsoTop, foot.x + bodyW / 2, hipY);
-  grad.addColorStop(0, shade(info.colors.primary, 0.12));
-  grad.addColorStop(1, shade(info.colors.primary, -0.22));
-  ctx.fillStyle = grad;
-  roundedRect(ctx, foot.x - bodyW / 2 + headShift * 0.4, torsoTop, bodyW, hipY - torsoTop, bodyW * 0.28);
-  ctx.fill();
-
-  // Bracos: apontam na direcao do heading (leitura corporal).
-  ctx.strokeStyle = shade(info.colors.secondary, -0.1);
-  ctx.lineWidth = Math.max(1.5, pixelHeight * 0.07);
-  const armY = torsoTop + (hipY - torsoTop) * 0.35;
-  const armSpread = a.state === 'jump' || a.action.kind === 'block_attempt' ? -pixelHeight * 0.3 : 0;
-  ctx.beginPath();
-  ctx.moveTo(foot.x - bodyW * 0.42, armY);
-  ctx.lineTo(foot.x - bodyW * 0.72, armY + pixelHeight * 0.16 + armSpread);
-  ctx.moveTo(foot.x + bodyW * 0.42, armY);
-  ctx.lineTo(foot.x + bodyW * 0.72, armY + pixelHeight * 0.16 + armSpread);
-  ctx.stroke();
-
-  // Cabeca
-  const headR = pixelHeight * 0.1;
-  ctx.fillStyle = '#c99a72';
-  ctx.beginPath();
-  ctx.arc(head.x + headShift, head.y + headR * 0.9, headR, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Numero
-  if (!options.immersion && pixelHeight > 26) {
-    ctx.fillStyle = info.colors.accent;
-    ctx.font = `bold ${Math.round(pixelHeight * 0.17)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(String(a.profile.jersey), foot.x, torsoTop + pixelHeight * 0.22);
-  }
-
-  // Indicadores
-  if (options.showIndicators && !options.immersion) {
-    if (info.isUser) {
-      ctx.strokeStyle = '#7ef6c0';
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.ellipse(foot.x, foot.y, bodyW * 0.85, bodyW * 0.34, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (info.isBallHandler) {
-      ctx.strokeStyle = 'rgba(255,220,120,0.75)';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.ellipse(foot.x, foot.y, bodyW * 0.7, bodyW * 0.28, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    // Barra de energia sob o jogador quando cansado.
-    if (a.stamina < 0.62) {
-      const w = bodyW * 1.1;
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(foot.x - w / 2, foot.y + 5, w, 3);
-      ctx.fillStyle = a.stamina < 0.3 ? '#ef5e5e' : '#f2c14e';
-      ctx.fillRect(foot.x - w / 2, foot.y + 5, w * a.stamina, 3);
-    }
-    // Desequilibrio visivel.
-    if (a.balance < 0.5) {
-      ctx.fillStyle = `rgba(255,90,90,${(1 - a.balance) * 0.6})`;
-      ctx.beginPath();
-      ctx.arc(head.x, head.y - headR, headR * 0.45, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  if (options.showNames && !options.immersion && pixelHeight > 34) {
-    ctx.fillStyle = 'rgba(240,245,255,0.82)';
-    ctx.font = `${Math.round(Math.max(9, pixelHeight * 0.13))}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(info.label, foot.x, head.y - headR * 1.4);
-  }
-
-  if (options.showDebug) {
-    ctx.strokeStyle = 'rgba(120,220,255,0.8)';
-    ctx.lineWidth = 1;
-    const dir = fromAngle(a.heading, 1.2);
-    const tip = proj.project(v3(a.pos.x + dir.x, a.pos.y + dir.y, 0.05));
-    if (tip) {
-      ctx.beginPath();
-      ctx.moveTo(foot.x, foot.y);
-      ctx.lineTo(tip.x, tip.y);
-      ctx.stroke();
-    }
-    // Vetor de deslocamento de peso (base do ankle breaker).
-    const ws = proj.project(v3(a.pos.x + a.weightShift.x * 2.4, a.pos.y + a.weightShift.y * 2.4, 0.05));
-    if (ws) {
-      ctx.strokeStyle = 'rgba(255,140,80,0.9)';
-      ctx.beginPath();
-      ctx.moveTo(foot.x, foot.y);
-      ctx.lineTo(ws.x, ws.y);
-      ctx.stroke();
-    }
-  }
-
   ctx.restore();
 }
 

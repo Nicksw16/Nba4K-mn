@@ -7,6 +7,8 @@ sem arredondar para cima. Legenda:
 - **Parcial** — o sistema existe e funciona, mas não na profundidade pedida.
 - **Ausente** — não implementado.
 
+Estado atual: **84 prontas, 36 parciais, 21 ausentes**.
+
 | # | Seção | Status | Observação |
 |---|---|---|---|
 | 1 | Visão do produto | Parcial | Partida, carreira, franquia, builder e treino existem. Hub aberto, rua, online e coleção não. |
@@ -44,11 +46,11 @@ sem arredondar para cima. Legenda:
 | 33 | Team gameplan AI | Pronto | Identidade derivada do elenco e ajustada durante o jogo. |
 | 34 | Matchup intelligence | Pronto | Detecta mismatch de tamanho, velocidade, força e arremesso. |
 | 35 | Coaching | Pronto | Playcalling, substituição, tempo técnico e mudança de plano. |
-| 36 | Physics-driven animation | Parcial | Todo movimento vem da física; não há blending nem IK porque não há rig. |
+| 36 | Physics-driven animation | Pronto | Esqueleto de 21 juntas com IK de duas ossadas. Pernas resolvidas até o pé plantado do simulador, separação quadril/ombro, inclinação pela aceleração e pelo equilíbrio, braços com alvo por ação, cabeça pelo olhar. Não há clipe nem blending: a pose é função do estado físico. |
 | 37 | Camera system | Pronto | Cinco modos, todos amortecidos, sem corte seco. |
 | 38 | Audio | Pronto | Tudo sintetizado: quique, rangido, aro, tabela, rede, contato, apito, torcida. |
-| 39 | Broadcast presentation | Parcial | Scorebug, ticker, destaques e flashes. Sem pré-jogo, intervalo ou replay. |
-| 40 | Visual style | Ausente | Render 2D estilizado em perspectiva, não PBR fotorrealista. |
+| 39 | Broadcast presentation | Parcial | Scorebug, ticker, destaques, faixa de LED com as cores dos times, placar suspenso com o jogo de verdade e flashes de câmera na arquibancada. Sem pré-jogo, intervalo ou replay. |
+| 40 | Visual style | Parcial | Corpos volumétricos com luz de arena consistente (chave, ambiente, contraluz), sombra projetada na direção da luz e reflexo no verniz. Não é PBR fotorrealista: Canvas 2D não tem z-buffer nem shader. |
 | 41 | Character creation | Parcial | Físico completo com efeito real; sem editor de rosto e aparência. |
 | 42 | MyPlayer builder | Pronto | 34 atributos, custo por físico, máximo alcançável e slots derivados. |
 | 43 | Badge system | Pronto | 53 badges, cada uma com situação específica declarada. |
@@ -105,10 +107,10 @@ sem arredondar para cima. Legenda:
 | 97 | Photo mode | Ausente | — |
 | 98 | Performance | Pronto | Simulação a ~4 ms por segundo de jogo; render em 60 fps. |
 | 99 | Loading | Pronto | Não há tela de carregamento. A distribuição em arquivo único abre direto do disco, sem servidor. |
-| 100 | Visual fidelity | Ausente | Fora do alcance de Canvas 2D sem assets. |
-| 101 | Animation quality | Parcial | Transições contínuas porque tudo vem da física, não de clipes. |
-| 102 | AI animation selection | Parcial | A escolha contextual existe (gather/finish/move); a apresentação é procedural. |
-| 103 | Micro-reactions | Parcial | O sistema de cues existe e é emitido; poucos são desenhados. |
+| 100 | Visual fidelity | Parcial | Arena inteira em geometria de mundo: arquibancada em degraus, público instanciado que reage à energia, faixa de LED, placar suspenso, piso de arena. Fotorrealismo com assets escaneados continua fora do alcance. |
+| 101 | Animation quality | Pronto | Contínua por construção: sem clipes não há transição para costurar. A passada tem altura vinda da fase do passo, o tronco antecipa a mudança de direção e o desequilíbrio aparece na postura. |
+| 102 | AI animation selection | Pronto | Cada ação tem pose própria e legível: set point do arremesso, extensão da bandeja, braços verticais no toco e no rebote, jab de roubo, cotovelos no boxout, mão de drible seguindo a bola de verdade. |
+| 103 | Micro-reactions | Parcial | Tornozelo quebrado, tropeço, toco, enterrada na cara e mão quente são desenhados sobre o atleta. O resto dos cues ainda só existe no evento. |
 | 104 | Crowd AI | Pronto | Quatro níveis reagindo ao contexto. |
 | 105 | Weather / ambiente | Ausente | — |
 | 106 | Sound design | Pronto | Timbre por superfície e intensidade por evento físico. |
@@ -176,6 +178,6 @@ sem arredondar para cima. Legenda:
 | Franchise possui profundidade? | Sim. |
 | Multiplayer possui arquitetura segura? | **Não** — não há multiplayer. |
 | Menus são rápidos? | Sim. |
-| Animações são fluidas? | Parcialmente — contínuas, mas procedurais. |
+| Animações são fluidas? | Sim — contínuas por construção, porque saem da física e não de clipes costurados. |
 | O jogo mantém 60 FPS? | Sim. |
-| O jogador sente que está dentro de uma partida real? | Parcialmente — a simulação convence; a apresentação visual não é AAA. |
+| O jogador sente que está dentro de uma partida real? | Em boa parte — a simulação convence e a apresentação agora tem arena, luz e corpos com volume. Falta o acabamento de asset que só uma produção com arte dedicada entrega. |

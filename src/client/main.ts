@@ -14,16 +14,17 @@ import { Team, teamLabel } from '../core/model/team.js';
 import { CameraMode, CameraState, addShake, buildProjection, createCamera, framingFor, updateCamera } from './render/camera.js';
 import {
   ActorRenderInfo, DEFAULT_RENDER_OPTIONS, RenderOptions, TeamColors,
-  drawActors, drawArena, drawBall, drawCourt, drawHoops, drawPlayArt,
+  drawActors, drawBall, drawCourt, drawHoops, drawPlayArt,
 } from './render/renderer.js';
 import { HudState, createHudState, drawMatchupInfo, drawPlayerPanel, drawScorebug, drawShotFeedback, drawShotMeter, drawTicker } from './ui/hud.js';
 import { AudioEngine, crowdLevelFor } from './audio/audio.js';
+import { drawApron, drawHall, drawJumbotron, drawRibbon, drawStands } from './render/arena.js';
 import { CONTROL_HELP, TOUCH_HELP, InputManager } from './input/input.js';
 import { TouchInput } from './input/touch.js';
 import { el, clear, card, sliderRow, selectRow, table } from './ui/dom.js';
 import { COURT, hoopGround } from '../core/config/court.js';
 import { v2, v3 } from '../core/math/vec.js';
-import { clamp, clamp01, formatClock, pct } from '../core/math/util.js';
+import { clamp, clamp01, damp, formatClock, pct } from '../core/math/util.js';
 import { BOX_HEADER, formatPlayerLine, offensiveRating } from '../core/stats/boxscore.js';
 import { SaveManager, SettingsSave } from '../core/save/save.js';
 import { openBuilder } from './screens/builder.js';
@@ -68,6 +69,8 @@ export class App {
   private timeScale = 1;
   private onGameEnd: ((sim: GameSim) => void) | null = null;
   private idleCameraAngle = 0;
+  /** Energia da torcida amortecida: a arquibancada nao levanta num quadro. */
+  private crowdEnergy = 0.25;
   private flashText = '';
   private flashUntil = 0;
   accessibility = {
@@ -621,6 +624,7 @@ export class App {
       lastEventDrama: lastDrama,
     });
     this.audio.setCrowd(crowd.level, crowd.intensity);
+    this.crowdEnergy = damp(this.crowdEnergy, crowd.intensity, 1.4, dt);
 
     // Camera segue a acao.
     const user = sim.userActor();
@@ -657,15 +661,29 @@ export class App {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
-    drawArena(ctx, w, h, this.render);
+    drawHall(ctx, w, h);
 
     const proj = buildProjection(this.camera, w, h, time, framingFor(w / Math.max(1, h)).shift);
     const colors: [TeamColors, TeamColors] = this.sim
       ? [this.sim.teams[0].identity.colors, this.sim.teams[1].identity.colors]
       : [this.league.teams[0].identity.colors, this.league.teams[1].identity.colors];
 
+    // De fora para dentro: arquibancada, LED, piso. A ordem e a do pintor,
+    // entao o que esta mais longe da camera vai antes.
+    drawStands(ctx, proj, time, this.crowdEnergy, this.render.quality);
+    drawRibbon(ctx, proj, time, colors[0].primary, colors[1].primary);
+    drawApron(ctx, proj);
     drawCourt(ctx, proj, this.render, colors[0]);
     drawHoops(ctx, proj);
+    if (this.sim && this.render.quality !== 'low') {
+      drawJumbotron(
+        ctx, proj,
+        [this.sim.score(0), this.sim.score(1)],
+        [this.sim.teams[0].identity.abbreviation, this.sim.teams[1].identity.abbreviation],
+        formatClock(this.sim.clock),
+        `${this.sim.period}o`,
+      );
+    }
 
     const sim = this.sim;
     if (!sim || this.screen !== 'game') return;
@@ -691,8 +709,11 @@ export class App {
         isBallHandler: handler?.id === a.id,
         label: `${a.profile.lastName}`,
       }));
-    drawActors(ctx, proj, infos, this.render);
+    // A bola vai junto: a mao de drible segue a bola de verdade, entao o
+    // quique e o braco nunca divergem.
+    drawActors(ctx, proj, infos, this.render, sim.ball.pos, time);
     drawBall(ctx, proj, sim.ball, time);
+
 
     // O HUD e desenhado em coordenadas logicas e escalado: em tela de celular
     // o mesmo scorebug ocuparia metade da largura.

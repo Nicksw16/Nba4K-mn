@@ -95,6 +95,35 @@ se ele escrevesse no objeto da liga, a próxima partida começaria contaminada �
 e duas simulações com a mesma seed dariam resultados diferentes. Há teste para
 isso.
 
+## Como um corpo vira imagem
+
+Nenhuma pose é animada à mão. O caminho é sempre este:
+
+```
+estado do ator            rig.ts                  shading.ts           body.ts
+(pés plantados,     →   esqueleto de 21     →   cápsula com        →  ordem por
+ fase da passada,       juntas, IK de           gradiente da          profundidade,
+ quadril, ombros,       duas ossadas,           seção do             cabeça, número,
+ olhar, equilíbrio,     poses por ação          cilindro, luz        micro-reações
+ ação em curso)                                 de arena
+```
+
+Três consequências que vale conhecer:
+
+- **Não existe blending.** Como a pose é função do estado, e o estado é
+  contínuo, a animação é contínua. Não há clipe para costurar nem transição
+  para acertar.
+- **O desenho não pode mentir.** O pé desenhado é o pé que o simulador
+  plantou; a mão de drible está onde a bola está. Se a física escorregar, a
+  imagem escorrega junto — e é assim que se descobre o bug.
+- **A luz é uma só.** `ARENA_LIGHT` decide o gradiente do corpo, a direção da
+  sombra no chão e o lado do contraluz. Mudar a direção muda as três coisas
+  juntas, que é o que impede a cena de se desmontar.
+
+A arena (`arena.ts`) é geometria de mundo projetada pela mesma câmera, não
+uma camada 2D colada na tela. Por isso a arquibancada tem paralaxe correta
+quando a câmera desliza.
+
 ## Determinismo
 
 Toda aleatoriedade passa por `Rng` semeado. Dada a mesma seed e o mesmo estado
