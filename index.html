@@ -50,7 +50,12 @@
     position: absolute; inset: 0; display: flex; flex-direction: column;
     background: radial-gradient(1200px 700px at 50% -10%, #16203a 0%, #05070d 62%);
     animation: fade 320ms var(--ease);
-    overflow: auto;
+    overflow-y: auto; overflow-x: hidden;
+    /* O body inteiro trava o toque para o jogo nao rolar junto. Aqui, que e
+       menu, o dedo precisa poder arrastar na vertical. */
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   @keyframes pop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
@@ -171,8 +176,10 @@
     box-shadow: 0 2px 14px rgba(0,0,0,0.45);
   }
   .touch-cluster {
-    position: absolute; right: calc(env(safe-area-inset-right) + 104px);
-    bottom: calc(env(safe-area-inset-bottom) + 104px);
+    /* A folga ate a borda tem que sobrar: botao encostado cai na faixa de
+       gestos do sistema operacional e o polegar erra o alvo. */
+    position: absolute; right: calc(env(safe-area-inset-right) + 132px);
+    bottom: calc(env(safe-area-inset-bottom) + 108px);
     width: 0; height: 0;
   }
   .touch-btn {
@@ -230,7 +237,6 @@
     .row { gap: 8px; }
     table { font-size: 11.5px; }
     th, td { padding: 6px 5px; }
-    .scroll { max-height: 44vh; -webkit-overflow-scrolling: touch; }
     .badge-list { grid-template-columns: 1fr; }
     .attr-grid { grid-template-columns: 1fr; }
   }
@@ -244,8 +250,44 @@
     .card h3 { font-size: 14px; }
     .card p { font-size: 11px; }
     .panel { padding: 12px 14px; margin: 0 24px 12px; }
-    .touch-cluster { right: calc(env(safe-area-inset-right) + 100px); bottom: calc(env(safe-area-inset-bottom) + 80px); }
+    /* A folga tem que sobrar: botao colado na borda cai na faixa de gestos do
+       sistema e o polegar erra. Medido no menor deitado (667x375). */
+    .touch-cluster { right: calc(env(safe-area-inset-right) + 118px); bottom: calc(env(safe-area-inset-bottom) + 84px); }
     .touch-btn { --r: 29px; font-size: 10px; }
+    /* Deitado sobra altura para pouca coisa: o conteudo tem que caber. */
+    .panel h2 { margin-bottom: 8px; font-size: 14px; }
+    .row { margin-bottom: 6px; }
+    .hint { padding: 0 24px 8px; font-size: 11px; }
+  }
+
+  /*
+   * A ACAO PRINCIPAL NUNCA PODE FICAR ABAIXO DA DOBRA.
+   *
+   * Num celular deitado sobram ~390 px de altura. A barra de botoes e o
+   * ultimo elemento do fluxo, entao "Iniciar partida" caia fora da tela e so
+   * aparecia depois de rolar -- o que, num menu que mal rola, e o mesmo que
+   * nao existir. Grudada no rodape ela esta sempre ao alcance do polegar, e o
+   * resto do conteudo rola por baixo.
+   *
+   * So a barra de nivel de tela (filha direta de .screen). As barras dentro
+   * de um .panel sao escolhas no meio do texto e continuam no lugar delas.
+   */
+  @media (pointer: coarse), (max-height: 600px) {
+    .screen > .toolbar {
+      position: sticky; bottom: 0; z-index: 4;
+      padding-top: 12px;
+      padding-bottom: calc(14px + env(safe-area-inset-bottom));
+      background: linear-gradient(to top, var(--bg) 58%, rgba(5, 7, 13, 0.92) 82%, rgba(5, 7, 13, 0));
+    }
+    /* Sem isso o ultimo painel fica escondido atras da barra. */
+    .screen > .panel:last-of-type { margin-bottom: 4px; }
+    .screen > .toolbar button { flex: 1 1 auto; min-width: 128px; }
+
+    /* Rolagem dentro de rolagem e o que deixa o toque ruim: o dedo nunca sabe
+       qual das duas vai andar, e a de dentro engole o gesto antes da de fora.
+       No celular existe UMA superficie de rolagem, a da propria tela.
+       Nao pode ficar na media query por largura: celular deitado e largo. */
+    .scroll { max-height: none; overflow: visible; }
   }
 </style>
 </head>

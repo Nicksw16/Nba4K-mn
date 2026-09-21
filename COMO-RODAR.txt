@@ -20,6 +20,11 @@ NO CELULAR
 
   Vire o aparelho na HORIZONTAL (o jogo avisa se estiver em pe).
 
+  Nos menus, a barra de botoes fica grudada no rodape: a acao principal
+  ("Iniciar partida", "Comecar temporada") esta sempre ao alcance do
+  polegar, sem precisar rolar ate o fim. O resto da tela rola por baixo
+  dela, com um arrasto so -- nao existe rolagem dentro de rolagem.
+
   CONTROLES DE TOQUE
 
      Mover ............ arraste em qualquer ponto da METADE ESQUERDA

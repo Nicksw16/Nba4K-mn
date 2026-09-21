@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke:mobile": "node tools/build-single-file.mjs && node tools/smoke-mobile.mjs",
     "test": "npm run build && node --test \"dist/tests/**/*.test.js\"",
     "sim:game": "npm run build --silent && node dist/src/cli/sim-game.js",
     "sim:season": "npm run build --silent && node dist/src/cli/sim-season.js",

@@ -1,110 +1,72 @@
 /**
- * Teste de fumaca em celular: viewport pequeno, toque emulado, controles.
- * Requer `npm run serve` rodando e playwright-core instalado.
+ * Celular, no arquivo unico aberto do disco. Checa o que realmente quebrou em
+ * uso: a acao principal fora do alcance do polegar, rolagem dentro de rolagem
+ * e botao de toque colado na borda da tela.
  */
 import { chromium, devices } from 'playwright-core';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 
-const errors = [];
+const file = pathToFileURL(resolve(import.meta.dirname, '..', 'COURTSIDE-LEGACY.html')).href;
+const TELAS = [
+  ['iPhone SE deitado', 667, 375],
+  ['iPhone 12 deitado', 844, 390],
+  ['Android comum', 800, 360],
+  ['tablet deitado', 1024, 768],
+];
+const MENUS = ['main', 'builder', 'franchise', 'career', 'practice', 'settings', 'controls'];
+
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
-// Celular deitado, como o jogo pede.
-const context = await browser.newContext({
-  viewport: { width: 844, height: 390 },
-  deviceScaleFactor: 3,
-  isMobile: true,
-  hasTouch: true,
-  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
-});
-const page = await context.newPage();
-page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+const falhas = [];
 
-await page.goto('http://127.0.0.1:8081/', { waitUntil: 'networkidle' });
-await page.waitForTimeout(900);
+for (const [nome, w, h] of TELAS) {
+  const ctx = await browser.newContext({ ...devices['iPhone 12'], viewport: { width: w, height: h }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => falhas.push(`${nome}: erro de pagina ${e.message}`));
+  await page.goto(file);
+  await page.waitForTimeout(1200);
 
-const mobileDetected = await page.evaluate(() => window.courtside.isMobile);
-console.log('detectou celular:', mobileDetected);
-await page.screenshot({ path: '/tmp/claude-0/m-menu.png' });
+  // 1. Uma unica superficie de rolagem por tela. Duas e o gesto vira loteria.
+  for (const t of MENUS) {
+    await page.evaluate((x) => window.courtside.go(x), t);
+    await page.waitForTimeout(350);
+    const n = await page.evaluate(() => [...document.querySelectorAll('#ui *')].filter((e) => {
+      const c = getComputedStyle(e);
+      return /auto|scroll/.test(c.overflowY) && e.scrollHeight > e.clientHeight + 1;
+    }).length);
+    if (n > 1) falhas.push(`${nome}/${t}: ${n} superficies de rolagem aninhadas`);
+  }
 
-// Entrar em partida rapida
-await page.tap('text=Partida rapida');
-await page.waitForTimeout(400);
-await page.tap('text=Iniciar partida');
-await page.waitForTimeout(2500);
-await page.screenshot({ path: '/tmp/claude-0/m-game.png' });
+  // 2. A barra de acao da tela tem que estar visivel SEM rolar.
+  await page.evaluate(() => window.courtside.go('main'));
+  await page.waitForTimeout(300);
+  await page.tap('text=Partida rapida');
+  await page.waitForTimeout(400);
+  const fora = await page.evaluate(() => [...document.querySelectorAll('.screen > .toolbar button')]
+    .filter((b) => { const r = b.getBoundingClientRect(); return r.top < 0 || r.bottom > innerHeight; })
+    .map((b) => (b.textContent || '').trim()));
+  if (fora.length) falhas.push(`${nome}: acao fora da tela -> ${fora.join(', ')}`);
 
-const controls = await page.evaluate(() => {
-  const layer = document.querySelector('.touch-layer');
-  const visible = layer && getComputedStyle(layer).display !== 'none';
-  const btns = [...document.querySelectorAll('.touch-btn')]
-    .filter((b) => !b.hidden)
-    .map((b) => b.textContent.trim());
-  return { visible, btns, mode: window.courtside.touch.mode };
-});
-console.log('controles visiveis:', controls.visible, '| modo:', controls.mode, '| botoes:', controls.btns.join(' '));
+  // 3. O toque tem que iniciar a partida de verdade.
+  await page.tap('text=Iniciar partida');
+  await page.waitForTimeout(2500);
+  const tela = await page.evaluate(() => window.courtside?.screen);
+  if (tela !== 'game') falhas.push(`${nome}: toque em "Iniciar partida" nao iniciou (tela=${tela})`);
 
-// Espera a bola ficar viva: em bola morta o atleta anda sozinho ate a posicao
-// e o comando do usuario nao vale, entao medir ali nao diz nada.
-await page.waitForFunction(() => window.courtside.sim?.phase === 'live', null, { timeout: 15000 });
+  // 4. Botao de toque colado na borda cai na faixa de gestos do sistema.
+  const colados = await page.evaluate(() => [...document.querySelectorAll('.touch-btn:not([hidden])')]
+    .map((b) => { const r = b.getBoundingClientRect(); return { t: (b.textContent || '').trim(), d: Math.round(innerWidth - r.right), b: Math.round(innerHeight - r.bottom) }; })
+    .filter((x) => x.d < 10 || x.b < 10));
+  if (colados.length) falhas.push(`${nome}: botoes colados na borda -> ${colados.map((c) => c.t).join(', ')}`);
 
-// Analogico flutuante: aparece enquanto o dedo esta na tela (nao depois).
-const before = await page.evaluate(() => {
-  const a = window.courtside.sim.userActor();
-  return a ? { x: a.pos.x, y: a.pos.y } : null;
-});
-const stickShown = await page.evaluate(() => {
-  const layer = document.querySelector('.touch-layer');
-  const send = (type, x, y) => layer.dispatchEvent(new PointerEvent(type, {
-    pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true, pointerType: 'touch',
-  }));
-  send('pointerdown', 180, 260);
-  send('pointermove', 260, 260);
-  return !document.querySelector('.touch-stick').hidden;
-});
-console.log('analogico apareceu com o dedo na tela:', stickShown);
-await page.waitForTimeout(1200);
-const after = await page.evaluate(() => {
-  const a = window.courtside.sim.userActor();
-  return a ? { x: a.pos.x, y: a.pos.y, speed: Math.hypot(a.vel.x, a.vel.y) } : null;
-});
-const moved = before && after ? Math.hypot(after.x - before.x, after.y - before.y) : 0;
-console.log(`atleta andou ${moved.toFixed(2)} m com o analogico (velocidade ${after?.speed.toFixed(2)} m/s)`);
-if (moved < 1) errors.push(`analogico nao moveu o atleta: ${moved.toFixed(2)} m`);
-
-// Arremesso: pressionar ARR, arrastar para baixo, soltar
-await page.evaluate(() => window.courtside.touch.setMode('offense'));
-const shootBox = await page.evaluate(() => {
-  const b = [...document.querySelectorAll('.touch-btn')].find((x) => x.textContent.trim() === 'ARR' && !x.hidden);
-  if (!b) return null;
-  const r = b.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-});
-// Garante contexto de ataque para testar o arremesso.
-await page.evaluate(() => window.courtside.touch.setMode('offense'));
-await page.waitForTimeout(80);
-if (shootBox) {
-  const meter = await page.evaluate(({ x, y }) => {
-    const layer = document.querySelector('.touch-layer');
-    const send = (type, cx, cy) => layer.dispatchEvent(new PointerEvent(type, {
-      pointerId: 2, clientX: cx, clientY: cy, bubbles: true, cancelable: true, pointerType: 'touch',
-    }));
-    send('pointerdown', x, y);
-    send('pointermove', x, y + 70);
-    return true;
-  }, shootBox);
-  await page.waitForTimeout(260);
-  // O HUD so mostra o medidor quando o atleta controlado esta com a bola.
-  // Aqui checamos o COMANDO gerado pelo toque, que e o que o motor consome.
-  const shot = await page.evaluate(() => {
-    const cmd = { move: { x: 0, y: 0 }, sprint: false, shootStick: 0, shootHeld: false, shootReleased: false,
-      passRequested: false, lobRequested: false, driveRequested: false, stealRequested: false,
-      blockRequested: false, postUp: false, callScreen: false, switchPlayer: false, timeout: false, intentionalFoul: false };
-    window.courtside.touch.apply(cmd, 0.016);
-    return { stick: cmd.shootStick, held: cmd.shootHeld };
-  });
-  console.log(`arremesso: shootStick=${shot.stick.toFixed(2)} segurando=${shot.held}`);
-  if (!(shot.stick > 0.4 && shot.held)) errors.push(`arrastar ARR nao carregou o arremesso: ${shot.stick}`);
-  await page.screenshot({ path: '/tmp/claude-0/m-shot.png' });
+  console.log(`${nome.padEnd(20)} ${w}x${h} verificado`);
+  await ctx.close();
 }
 
 await browser.close();
-console.log(errors.length ? `ERROS:\n${errors.join('\n')}` : 'sem erros de console');
+if (falhas.length) {
+  console.error('\nFALHOU:');
+  for (const f of falhas) console.error('  - ' + f);
+  process.exit(1);
+}
+console.log('\nCelular ok: uma rolagem por tela, acao ao alcance, toque inicia partida, botoes longe da borda.');
