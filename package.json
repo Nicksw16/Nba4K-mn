@@ -4,7 +4,9 @@
   "private": true,
   "description": "COURTSIDE: LEGACY - simulador de basquete com fisica continua, IA contextual, carreira e franquia.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
@@ -13,10 +15,12 @@
     "sim:game": "npm run build --silent && node dist/src/cli/sim-game.js",
     "sim:season": "npm run build --silent && node dist/src/cli/sim-season.js",
     "sim:tune": "npm run build --silent && node dist/src/cli/tune-report.js",
-    "serve": "npm run build --silent && node dist/src/cli/serve.js"
+    "serve": "npm run build --silent && node dist/src/cli/serve.js",
+    "build:single": "node tools/build-single-file.mjs"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.0"
   }
 }

@@ -104,7 +104,7 @@ sem arredondar para cima. Legenda:
 | 96 | Replay system | Parcial | Destaques selecionados por drama; sem reprodução visual. |
 | 97 | Photo mode | Ausente | — |
 | 98 | Performance | Pronto | Simulação a ~4 ms por segundo de jogo; render em 60 fps. |
-| 99 | Loading | Pronto | Não há tela de carregamento. |
+| 99 | Loading | Pronto | Não há tela de carregamento. A distribuição em arquivo único abre direto do disco, sem servidor. |
 | 100 | Visual fidelity | Ausente | Fora do alcance de Canvas 2D sem assets. |
 | 101 | Animation quality | Parcial | Transições contínuas porque tudo vem da física, não de clipes. |
 | 102 | AI animation selection | Parcial | A escolha contextual existe (gather/finish/move); a apresentação é procedural. |

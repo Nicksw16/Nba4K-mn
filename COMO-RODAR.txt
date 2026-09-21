@@ -1,0 +1,87 @@
+COURTSIDE: LEGACY
+=================
+
+
+>>> COMEÇE AQUI: dê dois cliques em  COURTSIDE-LEGACY.html  <<<
+
+    E so isso. O jogo inteiro esta dentro desse arquivo: nao precisa de
+    terminal, nao precisa instalar nada, nao precisa de internet.
+
+
+-------------------------------------------------------------------
+NO CELULAR
+-------------------------------------------------------------------
+
+  Mande o arquivo COURTSIDE-LEGACY.html para o celular (e-mail, Google
+  Drive, WhatsApp para voce mesmo, cabo) e abra.
+
+     Android: o Chrome abre direto do gerenciador de arquivos.
+     iPhone:  salve em "Arquivos" e toque nele.
+
+  Vire o aparelho na HORIZONTAL (o jogo avisa se estiver em pe).
+
+  CONTROLES DE TOQUE
+
+     Mover ............ arraste em qualquer ponto da METADE ESQUERDA
+                        (o analogico nasce onde o dedo encostar)
+     Correr ........... empurre o analogico ate o fim do curso
+     Arremessar ....... segure ARR, ARRASTE PARA BAIXO e solte no tempo
+                        (ou so segure e solte, se preferir o jeito simples)
+     Passar ........... toque em PASSE
+     Alley-oop ........ segure ATACAR e toque em PASSE
+     Atacar a cesta ... segure ATACAR
+     Drible ........... arraste DRIBLE na direcao (lados = crossover,
+                        cima = hesitation, baixo = stepback)
+     Jogo de costas ... segure POSTE
+     Roubar / tocar ... na defesa a botoeira TROCA SOZINHA
+
+
+-------------------------------------------------------------------
+NO COMPUTADOR
+-------------------------------------------------------------------
+
+  Dois cliques em COURTSIDE-LEGACY.html.
+
+  CONTROLES DE TECLADO
+
+     WASD ou setas .... mover
+     Shift ............ correr
+     Espaco ........... segurar e soltar para arremessar (ritmo)
+     J ................ passar (ou roubar, defendendo)
+     K ................ atacar a cesta
+     Z / X ............ move de drible
+     Q ................ trocar de jogador
+     C ................ trocar camera
+     T ................ tempo tecnico
+     Esc .............. pausar
+
+  Se conectar um controle, ele funciona automaticamente.
+
+
+-------------------------------------------------------------------
+O RESTO DA PASTA (opcional, so se quiser mexer no codigo)
+-------------------------------------------------------------------
+
+  Precisa de Node 20+.
+
+     npm install
+     npm run build          compila
+     npm run build:single   regenera o COURTSIDE-LEGACY.html
+     npm run serve          servidor local (imprime o IP para o celular)
+     npm test               roda os 59 testes
+
+  SIMULADORES (terminal, sem navegador)
+
+     node dist/src/cli/sim-game.js        partida com sumula completa
+     node dist/src/cli/sim-season.js 82   temporada inteira com playoffs
+     node dist/src/cli/mirror.js 6        teste de simetria da simulacao
+     node dist/src/cli/tune-report.js 6   medias contra alvos de liga real
+
+  LEITURA
+
+     README.md            visao geral e estado da calibracao
+     docs/CONTROLES.md    toque, teclado e o arremesso de ritmo
+     docs/COBERTURA.md    as 141 secoes do escopo com status honesto
+     docs/CALIBRACAO.md   metodo, bugs encontrados e numeros atuais
+     docs/ARQUITETURA.md  como o motor e organizado
+     docs/DESIGN.md       por que cada sistema e do jeito que e

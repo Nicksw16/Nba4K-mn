@@ -38,6 +38,23 @@ Se aparece na tela, opera sobre o mesmo núcleo que o simulador usa.
 
 ## Rodando
 
+### Jeito mais simples: um arquivo só
+
+`COURTSIDE-LEGACY.html` é o jogo inteiro em um único arquivo (270 KB).
+**Dois cliques e abre** — sem terminal, sem instalar nada, sem internet.
+
+Funciona assim porque o cliente é empacotado em um script clássico embutido no
+HTML. Módulos ES seriam bloqueados pelo navegador quando a página vem do disco
+(`file://`); sem nenhuma requisição de rede, a restrição não se aplica.
+
+Para regenerar depois de mexer no código:
+
+```bash
+npm run build:single
+```
+
+### Com servidor (desenvolvimento)
+
 ```bash
 npm install
 npm run build
@@ -51,9 +68,13 @@ npm test             # suíte de testes
 ### No celular
 
 O jogo tem controles de toque completos (analógico flutuante, botoeira que troca
-sozinha entre ataque e defesa, arremesso de ritmo por arrasto). Dois caminhos:
+sozinha entre ataque e defesa, arremesso de ritmo por arrasto). Três caminhos:
 
-**1. Pela rede local** — o computador serve, o celular abre:
+**1. O arquivo único** — mande `COURTSIDE-LEGACY.html` para o celular (e-mail,
+nuvem, cabo) e abra. No Android o Chrome abre direto; no iPhone, salve em
+Arquivos e toque nele.
+
+**2. Pela rede local** — o computador serve, o celular abre:
 
 ```bash
 npm run serve
@@ -63,7 +84,7 @@ O terminal imprime o endereço da máquina na rede (algo como
 `http://192.168.0.12:8080`). Abra esse endereço no navegador do celular, com os
 dois aparelhos no mesmo Wi-Fi.
 
-**2. Pelo GitHub Pages** — abre de qualquer lugar, sem computador ligado:
+**3. Pelo GitHub Pages** — abre de qualquer lugar, sem computador ligado:
 
 Em `Settings → Pages → Build and deployment`, escolha **Source: GitHub Actions**.
 O workflow `.github/workflows/pages.yml` publica a cada push e devolve o link.

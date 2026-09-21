@@ -40,12 +40,16 @@ jobs:
       - name: Compilar
         run: npm run build
 
+      - name: Gerar o arquivo unico
+        run: npm run build:single
+
       - name: Montar o site
         run: |
           mkdir -p _site
           cp index.html manifest.webmanifest icon.svg _site/
           cp icon-192.png icon-512.png apple-touch-icon.png _site/
           cp -r dist _site/dist
+          cp COURTSIDE-LEGACY.html _site/
           # O Pages serve arquivos estaticos; nenhum passo extra e necessario.
           echo "Arquivos publicados:" && find _site -maxdepth 2 -type f | head -20
 
