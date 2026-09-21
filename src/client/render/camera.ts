@@ -58,11 +58,15 @@ export function desiredCamera(mode: CameraMode, focus: CameraFocus): { pos: Vec3
       // Lateral alta deslizando junto com a acao. A camera fica quase em cima
       // do alvo no eixo longo: e isso que da o enquadramento de transmissao,
       // sem a quadra "torcendo" na tela.
-      const x = clamp(focus.action.x, 7.5, COURT.length - 7.5);
+      // A camera acompanha a acao, mas nao a persegue ponto a ponto: mistura
+      // com o centro da quadra para manter o enquadramento estavel quando a
+      // jogada vai para o fundo.
+      const follow = COURT.length / 2 + (focus.action.x - COURT.length / 2) * 0.62;
+      const x = clamp(follow, 9.5, COURT.length - 9.5);
       return {
-        pos: v3(x, -17.5, 12.2),
-        target: v3(x, mid - 0.4, 1.6),
-        fov: 47,
+        pos: v3(x, -18.5, 12.6),
+        target: v3(clamp(focus.action.x, 5, COURT.length - 5) * 0.55 + x * 0.45, mid - 0.4, 1.6),
+        fov: 48,
       };
     }
     case 'action': {
