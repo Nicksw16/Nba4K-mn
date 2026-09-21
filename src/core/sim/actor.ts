@@ -7,7 +7,7 @@
  */
 import { Vec2, v2 } from '../math/vec.js';
 import { PlayerProfile } from '../model/player.js';
-import { BadgeLoadout } from '../model/badges.js';
+import { BadgeEffect, BadgeLoadout, BadgeSheet, compileBadges, reactionBonusFor } from '../model/badges.js';
 import { activeBadges } from '../model/player.js';
 import { Attributes, centerOfMass, effectiveMass, standingReach } from '../model/attributes.js';
 import { Tuning } from '../config/tuning.js';
@@ -162,6 +162,9 @@ export interface Actor {
 
   /** Se controlado pelo humano nesta partida. */
   userControlled: boolean;
+
+  /** Ficha de badges pre-compilada (ver compileBadges). */
+  badgeSheet: BadgeSheet;
 }
 
 export interface ActorPhysics {
@@ -237,12 +240,28 @@ export function createActor(profile: PlayerProfile, team: 0 | 1, slot: number, p
     reactionCounters: {},
     reactionExpiry: {},
     userControlled: false,
+    badgeSheet: compileBadges(activeBadges(profile)),
   };
   return actor;
 }
 
 export function badges(a: Actor): BadgeLoadout {
   return activeBadges(a.profile);
+}
+
+/**
+ * Valor de um efeito de badge para este ator. Leitura O(1) na ficha
+ * pre-compilada; sinergias REACTION ativas entram como bonus extra.
+ */
+export function bv(a: Actor, effect: BadgeEffect): number {
+  const base = a.badgeSheet[effect] ?? 0;
+  if (a.reactionActive.size === 0) return base;
+  return base + reactionBonusFor(a.reactionActive, effect);
+}
+
+/** Recompila a ficha (chamar ao trocar loadout entre partidas). */
+export function refreshBadgeSheet(a: Actor): void {
+  a.badgeSheet = compileBadges(activeBadges(a.profile));
 }
 
 /** Atributo efetivo: base + takeover, degradado por fadiga onde faz sentido. */

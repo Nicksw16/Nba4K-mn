@@ -5,12 +5,10 @@
  * fadiga, adrenalina e takeover. E por isso que o mesmo jogador defende pior
  * no quarto periodo do que no primeiro sem que nenhum numero do perfil mude.
  */
-import { Actor, TakeoverMeters } from './actor.js';
+import { Actor, TakeoverMeters, bv } from './actor.js';
 import { Attributes, ATTRIBUTE_KEYS, effectiveMass, standingReach, centerOfMass, inertiaFactor } from '../model/attributes.js';
 import { Tuning } from '../config/tuning.js';
 import { attr01, clamp, clamp01 } from '../math/util.js';
-import { badgeValue } from '../model/badges.js';
-import { badges } from './actor.js';
 
 /** Atributos afetados por cada penalidade de fadiga. */
 const FATIGUE_GROUPS: { keys: (keyof Attributes)[]; penalty: keyof Tuning['fatigue'] }[] = [
@@ -38,7 +36,7 @@ export function refreshEffective(a: Actor, t: Tuning): void {
   for (const k of ATTRIBUTE_KEYS) eff[k] = base[k];
 
   // Fadiga reduz por grupo. "Pernas de aco" devolve parte da perda de arremesso.
-  const shotFatigueResist = badgeValue(badges(a), 'shot.fatigueResist');
+  const shotFatigueResist = bv(a, 'shot.fatigueResist');
   for (const group of FATIGUE_GROUPS) {
     let penalty = t.fatigue[group.penalty] as number;
     if (group.penalty === 'shootingPenalty') penalty *= 1 - clamp01(shotFatigueResist);
@@ -58,9 +56,9 @@ export function refreshEffective(a: Actor, t: Tuning): void {
   }
 
   // Badges fisicas que mexem em capacidade bruta.
-  const verticalBoost = badgeValue(badges(a), 'phys.verticalBoost');
+  const verticalBoost = bv(a, 'phys.verticalBoost');
   if (verticalBoost) eff.vertical *= 1 + verticalBoost;
-  const strengthHold = badgeValue(badges(a), 'phys.strengthHold');
+  const strengthHold = bv(a, 'phys.strengthHold');
   if (strengthHold) eff.strength *= 1 + strengthHold * 0.25;
 
   for (const k of ATTRIBUTE_KEYS) eff[k] = clamp(eff[k], 20, 110);
@@ -91,7 +89,7 @@ export function contextTopSpeed(a: Actor, t: Tuning, mode: 'free' | 'ball' | 'de
   if (mode === 'ball') {
     const swb = attr01(a.effective.speedWithBall);
     v *= L.dribbleSpeedFactor + swb * (1 - L.dribbleSpeedFactor) * 0.9;
-    v *= 1 + badgeValue(badges(a), 'play.speedWithBall');
+    v *= 1 + bv(a, 'play.speedWithBall');
   } else if (mode === 'defense') {
     v *= L.lateralFactor + attr01(a.effective.lateralQuickness) * 0.28;
   } else if (mode === 'backpedal') {

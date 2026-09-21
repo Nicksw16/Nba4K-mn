@@ -8,10 +8,8 @@
  */
 import { Vec2, add2, dot2, len2, mul2, norm2, sub2, v2, dist2, toAngle, fromAngle, angleDiff } from '../math/vec.js';
 import { clamp, clamp01 } from '../math/util.js';
-import { Actor, addCue } from './actor.js';
+import { Actor, addCue, bv } from './actor.js';
 import { Tuning } from '../config/tuning.js';
-import { badgeValue } from '../model/badges.js';
-import { badges } from './actor.js';
 
 export type ContactType =
   | 'body_up'
@@ -38,24 +36,30 @@ export interface ContactEvent {
   aggressorIsA: boolean;
   /** Angulo do contato em relacao ao peito de quem sofre (0 = de frente). */
   frontality: number;
+  /** True quando os dois chegaram igual: contato mutuo, sem responsavel claro. */
+  mutual: boolean;
 }
 
 const POSITION_SLOP = 0.008;
 
-/** Resolve todas as sobreposicoes do frame e devolve os contatos relevantes. */
-export function resolveContacts(actors: Actor[], dt: number, t: Tuning): ContactEvent[] {
+/**
+ * Resolve todas as sobreposicoes do frame e devolve os contatos relevantes.
+ * `ballLoose` importa: um encontrao com a bola solta e disputa de bola; o mesmo
+ * encontrao com a bola na mao de alguem e apenas contato fora da bola.
+ */
+export function resolveContacts(actors: Actor[], dt: number, t: Tuning, ballLoose = false): ContactEvent[] {
   const events: ContactEvent[] = [];
   const onCourt = actors.filter((a) => a.onCourt && a.state !== 'down');
   for (let i = 0; i < onCourt.length; i++) {
     for (let j = i + 1; j < onCourt.length; j++) {
-      const ev = resolvePair(onCourt[i], onCourt[j], dt, t);
+      const ev = resolvePair(onCourt[i], onCourt[j], dt, t, ballLoose);
       if (ev) events.push(ev);
     }
   }
   return events;
 }
 
-function resolvePair(a: Actor, b: Actor, dt: number, t: Tuning): ContactEvent | null {
+function resolvePair(a: Actor, b: Actor, dt: number, t: Tuning, ballLoose: boolean): ContactEvent | null {
   // Atletas em alturas muito diferentes (um no ar, outro no chao) colidem menos.
   const zGap = Math.abs(a.z - b.z);
   const verticalFactor = clamp01(1 - zGap / 1.1);
@@ -103,8 +107,21 @@ function resolvePair(a: Actor, b: Actor, dt: number, t: Tuning): ContactEvent | 
     severity = clamp01((reducedMass * closing) / 420);
   }
 
-  const type = classify(a, b, normal, closing, severity);
-  const aggressorIsA = dot2(a.vel, normal) > dot2(b.vel, normal);
+  const type = classify(a, b, normal, closing, severity, ballLoose);
+
+  // Quem e o agressor: quem se desloca MAIS na direcao do outro.
+  // O desempate importa: comparar os dois produtos escalares direto fazia com
+  // que empates (dois corpos quase parados) culpassem sempre o segundo ator da
+  // lista - e como a lista e ordenada por time, um dos times cometia 3x mais
+  // faltas do que o outro com elencos identicos.
+  // `normal` aponta de a para b. A velocidade de aproximacao de cada um e a
+  // componente da propria velocidade na direcao do OUTRO corpo.
+  const aClosing = dot2(a.vel, normal);
+  const bClosing = -dot2(b.vel, normal);
+  const closingDelta = aClosing - bClosing;
+  const aggressorIsA = Math.abs(closingDelta) < 0.15
+    ? len2(a.vel) > len2(b.vel)
+    : closingDelta > 0;
   const victim = aggressorIsA ? b : a;
   const aggressor = aggressorIsA ? a : b;
   const frontality = Math.abs(angleDiff(victim.heading, toAngle(mul2(normal, aggressorIsA ? -1 : 1))));
@@ -121,7 +138,13 @@ function resolvePair(a: Actor, b: Actor, dt: number, t: Tuning): ContactEvent | 
 
   if (severity < 0.015 && type === 'incidental') return null;
 
-  return { a, b, type, severity, normal, closingSpeed: Math.max(0, closing), aggressorIsA, frontality };
+  return {
+    a, b, type, severity, normal,
+    closingSpeed: Math.max(0, closing),
+    aggressorIsA,
+    frontality,
+    mutual: Math.abs(closingDelta) < 0.35,
+  };
 }
 
 /** O quanto um atleta consegue nao ceder terreno: forca + base plantada + equilibrio. */
@@ -129,16 +152,19 @@ export function anchorStrength(a: Actor, t: Tuning): number {
   const strength = clamp01((a.effective.strength - 40) / 55);
   const planted = a.grounded ? (len2(a.vel) < 1.2 ? 1 : 0.55) : 0.1;
   const stance = a.state === 'boxout' || a.state === 'screen' || a.state === 'posture_post' ? 1.25 : 1;
-  const hold = badgeValue(badges(a), 'phys.strengthHold');
+  const hold = bv(a, 'phys.strengthHold');
   const lowCom = clamp01(1.05 - a.physics.com / 1.15);
   return clamp01(strength * 0.55 * stance * planted * (1 + hold) + lowCom * 0.2 + a.balance * 0.2);
 }
 
-function classify(a: Actor, b: Actor, normal: Vec2, closing: number, severity: number): ContactType {
+function classify(a: Actor, b: Actor, normal: Vec2, closing: number, severity: number, ballLoose: boolean): ContactType {
   if (a.state === 'screen' || b.state === 'screen') return 'screen';
   if (a.state === 'boxout' || b.state === 'boxout') return 'boxout';
   if (!a.grounded || !b.grounded) return 'landing';
-  if (!a.hasBall && !b.hasBall && severity > 0.12) return 'loose_ball';
+  // Disputa de bola solta so existe se a bola estiver realmente solta.
+  if (ballLoose && !a.hasBall && !b.hasBall && severity > 0.12) return 'loose_ball';
+
+  if (!a.hasBall && !b.hasBall) return severity > 0.22 ? 'shoulder' : 'incidental';
 
   const ballCarrier = a.hasBall ? a : b.hasBall ? b : null;
   if (ballCarrier) {
@@ -156,7 +182,7 @@ function classify(a: Actor, b: Actor, normal: Vec2, closing: number, severity: n
 function applyBalanceFromContact(victim: Actor, aggressor: Actor, severity: number, frontality: number, type: ContactType, t: Tuning): void {
   // Contato de frente e absorvido pelo peito; de lado ou nas costas derruba.
   const angleFactor = 0.45 + clamp01(frontality / Math.PI) * 0.9;
-  const resist = badgeValue(badges(victim), 'phys.contactBalance');
+  const resist = bv(victim, 'phys.contactBalance');
   const strengthGap = clamp((aggressor.effective.strength - victim.effective.strength) / 60, -0.6, 0.9);
   const airborne = victim.grounded ? 1 : 1.6;
   let loss = severity * angleFactor * (1 + strengthGap) * airborne * 0.55;
@@ -230,9 +256,9 @@ export function releaseScreen(screener: Actor): void {
 export function screenNavigation(defender: Actor, screener: Actor, t: Tuning): number {
   const agility = clamp01((defender.effective.agility - 40) / 55);
   const iq = clamp01((defender.effective.defensiveIQ - 40) / 55);
-  const badge = badgeValue(badges(defender), 'def.screenNavigation');
+  const badge = bv(defender, 'def.screenNavigation');
   const screenerMass = clamp01((screener.physics.mass - 80) / 50);
-  const quality = badgeValue(badges(screener), 'reb.screenSet');
+  const quality = bv(screener, 'reb.screenSet');
   return clamp01(agility * 0.4 + iq * 0.3 + badge * 0.5 - screenerMass * 0.25 - quality * 0.3 + 0.25);
 }
 
@@ -246,7 +272,7 @@ export function applyBoxout(boxer: Actor, target: Actor, hoop: Vec2, dt: number,
 
   boxer.state = 'boxout';
   const strength = clamp01((boxer.effective.strength - 40) / 55);
-  const badge = badgeValue(badges(boxer), 'reb.boxout');
+  const badge = bv(boxer, 'reb.boxout');
   const power = (0.55 + strength * 0.8 + badge) * betweenness;
   const push = mul2(mul2(toHoop, -1), power * 5.2 * dt);
   target.vel = add2(target.vel, push);

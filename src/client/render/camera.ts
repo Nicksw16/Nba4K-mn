@@ -1,0 +1,192 @@
+/**
+ * CAMERA (secao 37).
+ *
+ * Camera pinhole real: posicao, alvo e campo de visao, com projecao
+ * perspectiva. Nao e um "2D de cima" disfarcado - a profundidade muda o
+ * tamanho dos corpos e a leitura de espaco, que e o que faz a camera
+ * broadcast parecer transmissao.
+ *
+ * Todo movimento de camera e amortecido (damp) com constante independente de
+ * framerate: nunca ha corte seco, nunca ha tranco (secao 130).
+ */
+import { Vec3, v3, sub3, norm3, len3 } from '../../core/math/vec.js';
+import { COURT, Side, hoopGround } from '../../core/config/court.js';
+import { clamp, damp, lerp } from '../../core/math/util.js';
+import { Vec2 } from '../../core/math/vec.js';
+
+export type CameraMode = 'broadcast' | 'action' | 'player_lock' | 'street' | 'cinematic' | 'free_throw' | 'replay';
+
+export interface CameraState {
+  pos: Vec3;
+  target: Vec3;
+  fov: number;
+  /** Rotacao de rolagem (usada apenas em cinematica). */
+  roll: number;
+  mode: CameraMode;
+  shake: number;
+}
+
+export function createCamera(): CameraState {
+  return {
+    pos: v3(COURT.length / 2, -14, 11),
+    target: v3(COURT.length / 2, COURT.width / 2, 1.2),
+    fov: 42,
+    roll: 0,
+    mode: 'broadcast',
+    shake: 0,
+  };
+}
+
+export interface CameraFocus {
+  /** Ponto de interesse principal (bola ou atleta travado). */
+  ball: Vec3;
+  /** Centro de massa da acao. */
+  action: Vec3;
+  /** Cesta atacada. */
+  attackingSide: Side;
+  /** Velocidade horizontal da acao (para antecipar o enquadramento). */
+  flow: number;
+  locked?: Vec3;
+}
+
+/** Alvo ideal de cada modo. Devolve posicao e alvo desejados. */
+export function desiredCamera(mode: CameraMode, focus: CameraFocus): { pos: Vec3; target: Vec3; fov: number } {
+  const hoop = hoopGround(focus.attackingSide);
+  const mid = COURT.width / 2;
+  switch (mode) {
+    case 'broadcast': {
+      // Lateral alta deslizando junto com a acao. A camera fica quase em cima
+      // do alvo no eixo longo: e isso que da o enquadramento de transmissao,
+      // sem a quadra "torcendo" na tela.
+      const x = clamp(focus.action.x, 7.5, COURT.length - 7.5);
+      return {
+        pos: v3(x, -17.5, 12.2),
+        target: v3(x, mid - 0.4, 1.6),
+        fov: 47,
+      };
+    }
+    case 'action': {
+      // Mais baixa e mais perto, deslocada para o lado da acao.
+      const x = clamp(focus.action.x, 6, COURT.length - 6);
+      return {
+        pos: v3(x, -12.5, 7.4),
+        target: v3(x + (focus.action.x - x) * 0.5, mid - 0.2, 1.5),
+        fov: 52,
+      };
+    }
+    case 'player_lock': {
+      const p = focus.locked ?? focus.ball;
+      // Atras do atleta, olhando para a cesta que ele ataca.
+      const toward = focus.attackingSide === 0 ? -1 : 1;
+      return {
+        pos: v3(p.x - toward * 7.2, clamp(p.y, 3, COURT.width - 3) - 2.2, 4.6),
+        target: v3(p.x + toward * 3.5, p.y + 0.6, 1.7),
+        fov: 55,
+      };
+    }
+    case 'street': {
+      const x = clamp(focus.action.x, 6, COURT.length - 6);
+      return {
+        pos: v3(x + 3.2, -11, 5.6),
+        target: v3(x, mid, 1.4),
+        fov: 58,
+      };
+    }
+    case 'free_throw': {
+      const dir = focus.attackingSide === 0 ? 1 : -1;
+      return {
+        pos: v3(hoop.x + dir * 12, mid, 3.2),
+        target: v3(hoop.x, mid, 2.6),
+        fov: 34,
+      };
+    }
+    case 'cinematic': {
+      return {
+        pos: v3(focus.action.x - 4.5, focus.action.y - 6.5, 2.2),
+        target: v3(focus.action.x, focus.action.y, 1.5),
+        fov: 38,
+      };
+    }
+    case 'replay':
+    default: {
+      return {
+        pos: v3(focus.action.x + 5, -9, 4.5),
+        target: v3(focus.action.x, COURT.width / 2, 1.6),
+        fov: 44,
+      };
+    }
+  }
+}
+
+/** Interpola a camera na direcao do alvo. Nunca corta. */
+export function updateCamera(cam: CameraState, focus: CameraFocus, dt: number, speedScale = 1): void {
+  const d = desiredCamera(cam.mode, focus);
+  // Constantes diferentes por eixo: a camera acompanha o eixo longo mais
+  // rapido do que sobe/desce, como um operador real.
+  const lambdaXY = (cam.mode === 'player_lock' ? 7 : 2.6) * speedScale;
+  const lambdaZ = 1.6 * speedScale;
+  cam.pos.x = damp(cam.pos.x, d.pos.x, lambdaXY, dt);
+  cam.pos.y = damp(cam.pos.y, d.pos.y, lambdaXY, dt);
+  cam.pos.z = damp(cam.pos.z, d.pos.z, lambdaZ, dt);
+  cam.target.x = damp(cam.target.x, d.target.x, lambdaXY * 1.25, dt);
+  cam.target.y = damp(cam.target.y, d.target.y, lambdaXY * 1.25, dt);
+  cam.target.z = damp(cam.target.z, d.target.z, lambdaZ, dt);
+  cam.fov = damp(cam.fov, d.fov, 2.2, dt);
+  cam.shake = Math.max(0, cam.shake - dt * 2.2);
+}
+
+export function addShake(cam: CameraState, amount: number): void {
+  cam.shake = Math.min(1, cam.shake + amount);
+}
+
+export interface Projection {
+  /** Projeta um ponto do mundo para a tela. Retorna null se atras da camera. */
+  project(p: Vec3): { x: number; y: number; scale: number; depth: number } | null;
+  width: number;
+  height: number;
+}
+
+/** Constroi a matriz de projecao do frame. */
+export function buildProjection(cam: CameraState, width: number, height: number, time: number): Projection {
+  const shakeX = cam.shake > 0 ? Math.sin(time * 41) * cam.shake * 0.11 : 0;
+  const shakeY = cam.shake > 0 ? Math.cos(time * 37) * cam.shake * 0.09 : 0;
+  const eye = v3(cam.pos.x + shakeX, cam.pos.y, cam.pos.z + shakeY);
+
+  const forward = norm3(sub3(cam.target, eye));
+  // Up do mundo = +Z. Right = forward x up.
+  const worldUp = v3(0, 0, 1);
+  const right = norm3(v3(
+    forward.y * worldUp.z - forward.z * worldUp.y,
+    forward.z * worldUp.x - forward.x * worldUp.z,
+    forward.x * worldUp.y - forward.y * worldUp.x,
+  ));
+  const up = v3(
+    right.y * forward.z - right.z * forward.y,
+    right.z * forward.x - right.x * forward.z,
+    right.x * forward.y - right.y * forward.x,
+  );
+
+  const f = 1 / Math.tan((cam.fov * Math.PI) / 360);
+  const aspect = width / height;
+  const half = height / 2;
+
+  return {
+    width,
+    height,
+    project(p: Vec3) {
+      const d = sub3(p, eye);
+      const depth = d.x * forward.x + d.y * forward.y + d.z * forward.z;
+      if (depth <= 0.25) return null;
+      const rx = d.x * right.x + d.y * right.y + d.z * right.z;
+      const ry = d.x * up.x + d.y * up.y + d.z * up.z;
+      const ndcX = (rx / depth) * f / aspect;
+      const ndcY = (ry / depth) * f;
+      return {
+        x: width / 2 + ndcX * half * aspect,
+        y: height / 2 - ndcY * half,
+        scale: (f * half) / depth,
+        depth,
+      };
+    },
+  };
+}

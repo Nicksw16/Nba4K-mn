@@ -334,3 +334,38 @@ export function badgeValue(loadout: BadgeLoadout, effect: BadgeEffect, reactionA
   }
   return total;
 }
+
+/**
+ * Ficha de badges pre-compilada. O loadout nao muda durante a partida, entao
+ * somar efeitos a cada frame e desperdicio: compila-se uma vez e le-se O(1).
+ */
+export type BadgeSheet = Partial<Record<BadgeEffect, number>>;
+
+export function compileBadges(loadout: BadgeLoadout): BadgeSheet {
+  const sheet: BadgeSheet = {};
+  for (const [id, tier] of Object.entries(loadout)) {
+    if (!tier) continue;
+    const def = BADGE_BY_ID.get(id);
+    if (!def) continue;
+    let fuse = 1;
+    for (const syn of SYNERGY_BY_PRIMARY.get(id) ?? []) {
+      if (syn.kind === 'fuse' && loadout[syn.secondary] && syn.fuseBonus) fuse *= 1 + syn.fuseBonus;
+    }
+    for (const [effect, base] of Object.entries(def.effects) as [BadgeEffect, number][]) {
+      sheet[effect] = (sheet[effect] ?? 0) + base * TIER_SCALE[tier] * fuse;
+    }
+  }
+  return sheet;
+}
+
+/** Contribuicao extra das sinergias REACTION ativas no momento. */
+export function reactionBonusFor(active: Set<string>, effect: BadgeEffect): number {
+  let total = 0;
+  for (const synId of active) {
+    const syn = SYNERGIES.find((x) => x.id === synId);
+    if (!syn || syn.kind !== 'reaction') continue;
+    const base = BADGE_BY_ID.get(syn.secondary)?.effects[effect];
+    if (base !== undefined) total += base * (syn.reactionBonus ?? 1);
+  }
+  return total;
+}

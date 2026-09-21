@@ -16,11 +16,9 @@
  */
 import { Vec2, add2, clampLen2, dot2, fromAngle, len2, mul2, norm2, sub2, toAngle, v2, angleDiff, rotate2 } from '../math/vec.js';
 import { clamp, clamp01, damp, lerp } from '../math/util.js';
-import { Actor, addCue } from './actor.js';
+import { Actor, addCue, bv } from './actor.js';
 import { contextTopSpeed } from './effective.js';
 import { Tuning } from '../config/tuning.js';
-import { badgeValue } from '../model/badges.js';
-import { badges } from './actor.js';
 
 /** Coeficiente de atrito solado-madeira. Limita a aceleracao lateral real. */
 export const SHOE_FRICTION = 1.62;
@@ -187,7 +185,7 @@ export function stepLocomotion(a: Actor, intent: LocomotionIntent, dt: number, t
   const lateralAccel = lateralComponent(a.vel, delta, applied);
   const sharpness = clamp01(lateralAccel / Math.max(1, maxTraction));
   const loss = sharpness * L.balanceLossScale * dt * 60 * lerp(1.15, 0.7, clamp01(a.effective.agility / 99));
-  const contactBalanceBadge = badgeValue(badges(a), 'phys.contactBalance');
+  const contactBalanceBadge = bv(a, 'phys.contactBalance');
   const realLoss = loss * (1 - clamp01(contactBalanceBadge) * 0.35);
   if (realLoss > 0) {
     a.balance = clamp01(a.balance - realLoss);
@@ -324,7 +322,7 @@ export function applyImpulse(a: Actor, impulse: Vec2, t: Tuning): void {
   const inv = 1 / Math.max(35, a.physics.mass);
   a.vel = add2(a.vel, mul2(impulse, inv));
   const mag = len2(impulse) * inv;
-  const resist = badgeValue(badges(a), 'phys.contactBalance');
+  const resist = bv(a, 'phys.contactBalance');
   const loss = clamp01(mag / 5.5) * (1 - clamp01(resist) * 0.4);
   a.balance = clamp01(a.balance - loss);
   a.stamina = clamp01(a.stamina - t.fatigue.contactDrain * clamp01(mag / 3));
